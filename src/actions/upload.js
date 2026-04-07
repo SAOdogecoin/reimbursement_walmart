@@ -85,8 +85,15 @@ export async function processSettlementFile(formData) {
       
       let transactionDateTime;
       if (typeof dateVal === 'number') {
+        // Excel serial date
         transactionDateTime = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dateStr)) {
+        // US format M/D/YYYY or M/D/YYYY H:MM
+        const [datePart] = dateStr.split(' ');
+        const [m, d, y] = datePart.split('/');
+        transactionDateTime = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
       } else {
+        // ISO format YYYY-MM-DD or fallback
         transactionDateTime = new Date(dateStr);
       }
 
@@ -137,10 +144,9 @@ export async function fetchClaims(merchantName) {
 }
 
 export async function fetchCrosscheckData(merchantName) {
-   // Fetch all claims for that merchant so the client can perform crosschecks natively
-   return await prisma.settlementClaim.findMany({
-       where: { merchantName }
-   });
+   // Empty string = all clients
+   const where = merchantName ? { merchantName } : {};
+   return await prisma.settlementClaim.findMany({ where });
 }
 
 export async function getMerchants() {
