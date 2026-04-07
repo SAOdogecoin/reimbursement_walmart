@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [uploadMerchantName, setUploadMerchantName] = useState("");
   
   // Claim UI State
   const [expandedClaims, setExpandedClaims] = useState(new Set());
@@ -161,7 +162,7 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("merchantName", "Master Settlement Data"); 
+      formData.append("merchantName", uploadMerchantName.trim() || "Master Settlement Data");
       const result = await processSettlementFile(formData);
       if (result.error) toast.error(result.error);
       else {
@@ -203,10 +204,18 @@ export default function Dashboard() {
                 <DialogContent>
                     <DialogHeader><DialogTitle>Settings</DialogTitle></DialogHeader>
                     <div className="space-y-5 mt-4">
-                        <div className="flex justify-between items-center pb-4 border-b">
+                        <div className="flex flex-col gap-2 pb-4 border-b">
                             <span className="font-medium text-sm">Update Settlement Data</span>
-                            <div className="relative">
-                                <Button variant="outline" size="sm" onClick={() => settlementFileInputRef.current?.click()} className="rounded-xl"><Table2 className="mr-2 h-4 w-4"/>Manage DB</Button>
+                            <Input
+                                placeholder="Merchant name (e.g. Soylent Nutrition, Inc.)"
+                                value={uploadMerchantName}
+                                onChange={(e) => setUploadMerchantName(e.target.value)}
+                                className="text-sm"
+                            />
+                            <div className="flex justify-end">
+                                <Button variant="outline" size="sm" onClick={() => settlementFileInputRef.current?.click()} className="rounded-xl" disabled={!uploadMerchantName.trim()}>
+                                    <Table2 className="mr-2 h-4 w-4"/>Upload to DB
+                                </Button>
                                 <input type="file" ref={settlementFileInputRef} className="hidden" accept=".csv,.xlsx" onChange={handleSettlementUpload} />
                             </div>
                         </div>
