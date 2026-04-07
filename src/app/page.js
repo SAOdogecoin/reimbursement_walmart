@@ -33,7 +33,9 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("database");
-  const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [skipDuplicates, setSkipDuplicates] = useState(() => {
+    try { const s = localStorage.getItem("skipDuplicates"); return s !== null ? JSON.parse(s) : true; } catch { return true; }
+  });
   const [uploadQueue, setUploadQueue] = useState([]); // [{id, file, clientName, clientMode, status, result}]
   const [partnerIdMap, setPartnerIdMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem("partnerIdMap") || "{}"); } catch { return {}; }
@@ -106,24 +108,30 @@ export default function Dashboard() {
   const settlementFileInputRef = useRef(null);
 
   // Filters State
-  const [filters, setFilters] = useState({
-    "Inbound Discrepancy": true,
-    "Damaged Inbound": true,
-    "MTR Shortage": true,
-    "Lost in Warehouse": true,
-    "Damaged in Warehouse": true,
-    "Unused Label": true,
+  const [filters, setFilters] = useState(() => {
+    const defaults = {
+      "Inbound Discrepancy": true,
+      "Damaged Inbound": true,
+      "MTR Shortage": true,
+      "Lost in Warehouse": true,
+      "Damaged in Warehouse": true,
+      "Unused Label": true,
+    };
+    try { const s = localStorage.getItem("filters"); return s ? { ...defaults, ...JSON.parse(s) } : defaults; } catch { return defaults; }
   });
 
-  const [toggles, setToggles] = useState({
-    hideReimbursed: true,
-    markInvestigated: true,
-    showDate: false
+  const [toggles, setToggles] = useState(() => {
+    const defaults = { hideReimbursed: true, markInvestigated: true, showDate: false };
+    try { const s = localStorage.getItem("toggles"); return s ? { ...defaults, ...JSON.parse(s) } : defaults; } catch { return defaults; }
   });
 
   useEffect(() => {
     getMerchants().then(setMerchants).catch(console.error);
   }, []);
+
+  useEffect(() => { try { localStorage.setItem("toggles", JSON.stringify(toggles)); } catch {} }, [toggles]);
+  useEffect(() => { try { localStorage.setItem("filters", JSON.stringify(filters)); } catch {} }, [filters]);
+  useEffect(() => { try { localStorage.setItem("skipDuplicates", JSON.stringify(skipDuplicates)); } catch {} }, [skipDuplicates]);
 
   const handleAuditFiles = async (files) => {
     setIsLoading(true);
