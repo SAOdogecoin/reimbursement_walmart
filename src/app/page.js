@@ -28,7 +28,7 @@ export default function Dashboard() {
 
   // Settings & DB State
   const [merchants, setMerchants] = useState([]);
-  const [selectedMerchant, setSelectedMerchant] = useState("");
+  const [selectedMerchant, setSelectedMerchant] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -616,12 +616,14 @@ export default function Dashboard() {
           className={`${panel} flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed cursor-pointer hover:border-slate-300 transition-colors`}
           onClick={() => multiFileInputRef.current?.click()}
         >
-          <div className="w-11 h-11 rounded-xl bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center">
-            <FileSpreadsheet size={22} className="text-slate-400" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-foreground">Drop audit reports here</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">InboundReceipt or Reconciliation files</p>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center shrink-0">
+              <FileSpreadsheet size={16} className="text-slate-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-slate-700 dark:text-foreground">Drop audit reports here</p>
+              <p className="text-[11px] text-slate-400">InboundReceipt or Reconciliation files</p>
+            </div>
           </div>
           <div className="flex gap-2 w-full" onClick={e => e.stopPropagation()}>
             <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => multiFileInputRef.current?.click()}>
@@ -633,19 +635,10 @@ export default function Dashboard() {
             <input type="file" ref={multiFileInputRef} multiple className="hidden" accept=".csv,.xlsx" onChange={e => handleAuditFiles(e.target.files)} />
           </div>
           {(inboundFiles.length > 0 || reconFiles.length > 0) && (
-            <div className="w-full text-left space-y-1.5">
-              {inboundFiles.length > 0 && (
-                <div className="bg-slate-50 dark:bg-muted rounded-lg border border-slate-100 dark:border-border p-2.5">
-                  <p className={`${sectionLabel} mb-1`}>Inbound Receipts</p>
-                  {inboundFiles.map(f => <p key={f} className="text-[11px] text-slate-600 dark:text-foreground truncate">{f}</p>)}
-                </div>
-              )}
-              {reconFiles.length > 0 && (
-                <div className="bg-slate-50 dark:bg-muted rounded-lg border border-slate-100 dark:border-border p-2.5">
-                  <p className={`${sectionLabel} mb-1`}>Reconciliation</p>
-                  {reconFiles.map(f => <p key={f} className="text-[11px] text-slate-600 dark:text-foreground truncate">{f}</p>)}
-                </div>
-              )}
+            <div className="w-full text-left space-y-1">
+              {[...inboundFiles, ...reconFiles].map(f => (
+                <p key={f} className="text-[11px] text-slate-600 dark:text-foreground truncate px-0.5">{f}</p>
+              ))}
             </div>
           )}
         </div>
