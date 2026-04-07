@@ -36,6 +36,9 @@ export default function Dashboard() {
   const [skipDuplicates, setSkipDuplicates] = useState(() => {
     try { const s = localStorage.getItem("skipDuplicates"); return s !== null ? JSON.parse(s) : true; } catch { return true; }
   });
+  const [autoCheck, setAutoCheck] = useState(() => {
+    try { const s = localStorage.getItem("autoCheck"); return s !== null ? JSON.parse(s) : true; } catch { return true; }
+  });
   const [uploadQueue, setUploadQueue] = useState([]); // [{id, file, clientName, clientMode, status, result}]
   const [partnerIdMap, setPartnerIdMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem("partnerIdMap") || "{}"); } catch { return {}; }
@@ -130,6 +133,7 @@ export default function Dashboard() {
   useEffect(() => { try { localStorage.setItem("toggles", JSON.stringify(toggles)); } catch {} }, [toggles]);
   useEffect(() => { try { localStorage.setItem("filters", JSON.stringify(filters)); } catch {} }, [filters]);
   useEffect(() => { try { localStorage.setItem("skipDuplicates", JSON.stringify(skipDuplicates)); } catch {} }, [skipDuplicates]);
+  useEffect(() => { try { localStorage.setItem("autoCheck", JSON.stringify(autoCheck)); } catch {} }, [autoCheck]);
 
   const handleAuditFiles = async (files) => {
     setIsLoading(true);
@@ -158,28 +162,37 @@ export default function Dashboard() {
 
     setInboundFiles(newInbound);
     setReconFiles(newRecon);
+    if (multiFileInputRef.current) multiFileInputRef.current.value = "";
 
     const uniqueClaims = new Map();
     [...generatedClaims, ...claimsAccumulator].forEach(claim => {
       const key = `${claim.claimType}|${claim.inboundId || claim.poNumber || claim.gtin}`;
       if (!uniqueClaims.has(key)) uniqueClaims.set(key, claim);
     });
+    const finalClaims = Array.from(uniqueClaims.values());
 
-    setGeneratedClaims(Array.from(uniqueClaims.values()));
+    if (autoCheck && selectedMerchant && finalClaims.length > 0) {
+      const checked = await handleCrosscheck(finalClaims);
+      if (!checked) setGeneratedClaims(finalClaims);
+      toast.success("Audit updated & crosschecked.");
+    } else {
+      setGeneratedClaims(finalClaims);
+      toast.success("Audit updated.");
+    }
     setIsLoading(false);
-    toast.success("Audit updated.");
   };
 
-  const handleCrosscheck = async () => {
-    if (!selectedMerchant) return toast.error("Select a merchant first.");
-    if (generatedClaims.length === 0) return toast.error("Upload reports first.");
-    setIsLoading(true);
+  const handleCrosscheck = async (claimsOverride) => {
+    const claims = claimsOverride ?? generatedClaims;
+    if (!selectedMerchant) { if (!claimsOverride) toast.error("Select a merchant first."); return null; }
+    if (claims.length === 0) { if (!claimsOverride) toast.error("Upload reports first."); return null; }
+    if (!claimsOverride) setIsLoading(true);
 
     try {
       const merchantArg = selectedMerchant === "all" ? "" : selectedMerchant;
       const historicalSettlements = await fetchCrosscheckData(merchantArg);
 
-      const allGtins = [...new Set(generatedClaims.map(c => (c.gtin || "").replace(/^0+/, "")).filter(Boolean))];
+      const allGtins = [...new Set(claims.map(c => (c.gtin || "").replace(/^0+/, "")).filter(Boolean))];
       let caseStatusList = [];
       try {
         caseStatusList = await fetchCaseStatuses(allGtins);
@@ -192,10 +205,9 @@ export default function Dashboard() {
         caseStatusByGtin.get(cs.gtin).push(cs);
       });
 
-      const newClaims = generatedClaims.map(claim => {
+      const newClaims = claims.map(claim => {
         const normGtin = (claim.gtin || "").replace(/^0+/, "");
         const po = claim.poNumber;
-
         const matches = historicalSettlements.filter(s => {
           const sGtin = (s.partnerGtin || "").replace(/^0+/, "");
           const sPo = s.walmartPoNumber;
@@ -207,18 +219,19 @@ export default function Dashboard() {
           if (claim.claimType === "Unused Label") return sPo === po && s.transactionType === "InboundTransportationFee";
           return false;
         });
-
         const caseStatusMatches = caseStatusByGtin.get(normGtin) || [];
         return { ...claim, reimbursementMatches: matches, caseStatusMatches };
       });
 
       setGeneratedClaims(newClaims);
-      toast.success("Crosscheck complete");
+      if (!claimsOverride) toast.success("Crosscheck complete");
+      return newClaims;
     } catch (err) {
       console.error(err);
-      toast.error("Crosscheck failed.");
+      if (!claimsOverride) toast.error("Crosscheck failed.");
+      return null;
     } finally {
-      setIsLoading(false);
+      if (!claimsOverride) setIsLoading(false);
     }
   };
 
@@ -638,7 +651,7 @@ export default function Dashboard() {
             <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => multiFileInputRef.current?.click()}>
               <FolderOpen size={12} /> Select Files
             </button>
-            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); }}>
+            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); setSelectedClaimKey(null); if (multiFileInputRef.current) multiFileInputRef.current.value = ""; }}>
               <FileText size={12} /> New Audit
             </button>
             <input type="file" ref={multiFileInputRef} multiple className="hidden" accept=".csv,.xlsx" onChange={e => handleAuditFiles(e.target.files)} />
@@ -654,7 +667,31 @@ export default function Dashboard() {
 
         {/* ── Crosscheck ── */}
         <div className={panel}>
-          <p className={fieldLabel}>Merchant</p>
+          {generatedClaims.length > 0 && (() => {
+            const reimbursedCount = generatedClaims.filter(c => {
+              if (!c.reimbursementMatches?.length) return false;
+              return c.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0) >= (c.shortage || c.damagedUnits || 0);
+            }).length;
+            return (
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 bg-slate-50 dark:bg-muted rounded-lg px-3 py-2 text-center border border-slate-100 dark:border-border">
+                  <p className="text-lg font-bold text-slate-900 dark:text-foreground leading-none">{generatedClaims.length}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Eligible</p>
+                </div>
+                <div className="flex-1 bg-emerald-50 dark:bg-muted rounded-lg px-3 py-2 text-center border border-emerald-100 dark:border-border">
+                  <p className="text-lg font-bold text-emerald-700 leading-none">{reimbursedCount}</p>
+                  <p className="text-[10px] text-emerald-600 uppercase tracking-widest mt-0.5">Reimbursed</p>
+                </div>
+              </div>
+            );
+          })()}
+          <div className="flex items-center justify-between mb-1.5">
+            <p className={fieldLabel} style={{marginBottom:0}}>Merchant</p>
+            <label className="flex items-center gap-1.5 cursor-pointer" onClick={e => e.stopPropagation()}>
+              <Checkbox checked={autoCheck} onCheckedChange={setAutoCheck} className="w-3 h-3" />
+              <span className="text-[10px] text-slate-500 font-medium">Auto crosscheck</span>
+            </label>
+          </div>
           <Select value={selectedMerchant} onValueChange={setSelectedMerchant}>
             <SelectTrigger className="bg-slate-50 dark:bg-muted border-slate-200 dark:border-border text-sm">
               <SelectValue placeholder="Select database target..." />
@@ -666,7 +703,7 @@ export default function Dashboard() {
           </Select>
           <button
             className="w-full mt-3 inline-flex items-center justify-center gap-2 h-9 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 transition-colors"
-            onClick={handleCrosscheck}
+            onClick={() => handleCrosscheck()}
             disabled={isLoading}
           >
             <RefreshCcw size={13} /> Run Crosscheck
