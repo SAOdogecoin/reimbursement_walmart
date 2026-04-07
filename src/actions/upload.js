@@ -15,9 +15,8 @@ export async function processSettlementFile(formData) {
     const file = formData.get("file");
     const merchantName = formData.get("merchantName");
 
-    if (!file || !merchantName) {
-      return { success: false, error: "File and Merchant Name are required." };
-    }
+    if (!file) return { success: false, error: "No file attached to the request." };
+    if (!merchantName) return { success: false, error: "Merchant name is missing. Select or enter a client name before uploading." };
 
     const arrayBuffer = await file.arrayBuffer();
     const workbook = xlsx.read(arrayBuffer, { type: "buffer" });
@@ -38,7 +37,7 @@ export async function processSettlementFile(formData) {
     }
 
     if (headerRowIndex === -1) {
-       return { success: false, error: "Could not find 'Transaction Type' header." };
+       return { success: false, error: "Could not find a 'Transaction Type' column. Make sure this is a WFS Settlement export (CSV or XLSX)." };
     }
 
     const typeColIndex = headers.indexOf('transaction type');
@@ -52,35 +51,76 @@ export async function processSettlementFile(formData) {
     const gtinColIndex = headers.findIndex(h => h.includes('partner gtin') || h === 'gtin');
     const qtyColIndex = headers.findIndex(h => h === 'qty' || h === 'quantity');
 
-    if (refIdColIndex === -1 || netPayColIndex === -1 || dateColIndex === -1) {
-       return { success: false, error: "Missing required columns: WFSReferenceID, Net Payable, or Transaction Date/Time" };
+    const missingCols = [
+      refIdColIndex === -1 && "WFSReferenceId",
+      netPayColIndex === -1 && "Net Payable",
+      dateColIndex === -1 && "Transaction Date/Time",
+    ].filter(Boolean);
+    if (missingCols.length) {
+      return { success: false, error: `Missing required columns: ${missingCols.join(", ")}. Verify the file is a complete WFS Settlement export.` };
     }
 
     const relevantTransactionTypes = new Set(['Refund', 'LostInventory', 'DamageInWarehouse', 'InboundTransportationFee']);
     const parsedRows = [];
+    const warnings = [];
+
+    // Read GTIN directly from the sheet cell to avoid scientific notation precision loss.
+    // xlsx parses "8.50036E+11" from CSV text as 850036000000 (truncated). Direct cell
+    // access gives us cell.v which, for XLSX files, is the full precise integer.
+    const getGtinFromCell = (rowIdx) => {
+      if (gtinColIndex < 0) return '';
+      const addr = xlsx.utils.encode_cell({ r: rowIdx, c: gtinColIndex });
+      const cell = sheet[addr];
+      if (!cell || cell.v == null) return '';
+      if (cell.t === 'n') {
+        // For XLSX: cell.v is the precise stored number (safe for integers < 2^53)
+        // For CSV: xlsx already parsed the scientific notation, precision may be lost
+        const numStr = String(Math.round(cell.v));
+        // Flag suspicious GTINs: if a 10+ digit number ends in 4+ zeros it was likely
+        // scientific-notation in the source CSV (e.g. 850036000000 vs 850036463405)
+        if (numStr.length >= 10 && /0{4,}$/.test(numStr)) {
+          warnings.push(`GTIN ${numStr} may be truncated (scientific notation in source CSV). Format GTIN column as Text in Excel before exporting.`);
+        }
+        return numStr;
+      }
+      if (cell.t === 's') {
+        const s = cell.v.trim().replace(/,/g, '');
+        if (/^[\d.]+[eE][+\-]?\d+$/i.test(s)) {
+          const numStr = String(Math.round(parseFloat(s)));
+          warnings.push(`GTIN ${numStr} may be truncated — source cell was in scientific notation (${s}). Format GTIN column as Text in Excel.`);
+          return numStr;
+        }
+        return s.replace(/[^0-9]/g, '');
+      }
+      return String(cell.v);
+    };
 
     const dataRows = data.slice(headerRowIndex + 1);
 
+    let dataRowOffset = 0;
     for (const row of dataRows) {
+      const sheetRowIdx = headerRowIndex + 1 + dataRowOffset;
+      dataRowOffset++;
+
       if (!row || !row.length) continue;
       const transactionType = String(row[typeColIndex] || "").trim();
       const reasonCode = String(row[reasonColIndex] || "").trim();
       const wfsReferenceId = String(row[refIdColIndex] || "").trim();
       const netPayableStr = row[netPayColIndex] != null ? String(row[netPayColIndex]).trim() : "";
-      
+
       let dateVal = row[dateColIndex];
       let dateStr = dateVal != null ? String(dateVal).trim() : "";
-      
+
       if (!transactionType || !relevantTransactionTypes.has(transactionType)) continue;
       if (transactionType === 'Refund' && !reasonCode.toLowerCase().includes('inbound')) {
          continue;
       }
 
       if (!wfsReferenceId) continue;
-      
+
       let netPayable = parseFloat(netPayableStr.replace(/[^0-9.-]+/g,""));
       const poVal = poColIndex > -1 ? String(row[poColIndex] || "").trim() : "";
-      const gtinVal = gtinColIndex > -1 ? String(row[gtinColIndex] || "").trim() : "";
+      const gtinVal = getGtinFromCell(sheetRowIdx);
       const qtyVal = qtyColIndex > -1 ? parseInt(row[qtyColIndex]) : 1;
       
       let transactionDateTime;
@@ -123,14 +163,19 @@ export async function processSettlementFile(formData) {
         skipped = parsedRows.length - added;
     } catch (e) {
         console.error("Bulk insert failed:", e);
-        return { success: false, error: "Database insert error." };
+        const msg = e?.message || "";
+        if (msg.includes("connect")) return { success: false, error: "Database connection failed. Check DATABASE_URL environment variable." };
+        if (msg.includes("unique")) return { success: false, error: "Duplicate key error during insert. Try enabling skip duplicates." };
+        return { success: false, error: `Database insert error: ${msg.slice(0, 120)}` };
     }
 
-    return { success: true, added, skipped };
+    return { success: true, added, skipped, warnings: [...new Set(warnings)] };
     
   } catch (error) {
     console.error("Upload error:", error);
-    return { success: false, error: error.message };
+    const msg = error?.message || "Unknown error";
+    if (msg.includes("maxBodyLength") || msg.includes("size")) return { success: false, error: "File too large. Max upload size is 10MB." };
+    return { success: false, error: `Upload failed: ${msg.slice(0, 200)}` };
   }
 }
 

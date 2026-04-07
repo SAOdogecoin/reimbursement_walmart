@@ -252,9 +252,19 @@ export default function Dashboard() {
       const result = await processSettlementFile(formData);
       const status = result.error ? "error" : "done";
       setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status, result } : i));
+      if (result.error) {
+        toast.error(`${item.file.name}: ${result.error}`);
+      } else {
+        toast.success(`${clientName}: +${result.added} rows, ${result.skipped} skipped`);
+        if (result.warnings?.length) {
+          result.warnings.forEach(w => toast.warning(`⚠ ${w}`, { duration: 8000 }));
+        }
+      }
       return { ...item, status, result };
-    } catch {
-      setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: "error", result: { error: "Upload failed" } } : i));
+    } catch (err) {
+      const msg = err?.message || "Network or server error";
+      setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: "error", result: { error: msg } } : i));
+      toast.error(`${item.file.name}: ${msg}`);
     }
   };
 
@@ -267,7 +277,6 @@ export default function Dashboard() {
     }
     getMerchants().then(setMerchants);
     setIsLoading(false);
-    toast.success("Queue processed.");
   };
 
   // --- Helpers ---
