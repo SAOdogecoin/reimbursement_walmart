@@ -42,21 +42,18 @@ export default function Dashboard() {
   });
 
   // Claim UI State
-  const [expandedClaims, setExpandedClaims] = useState(new Set());
+  const [selectedClaimKey, setSelectedClaimKey] = useState(null);
   const [investigatedClaims, setInvestigatedClaims] = useState(new Set());
   const [notesEnabled, setNotesEnabled] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem("notesEnabled") || "[]")); } catch { return new Set(); }
+    try {
+      const saved = localStorage.getItem("notesEnabled");
+      if (saved !== null) return new Set(JSON.parse(saved));
+    } catch {}
+    return new Set(["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage", "Lost in Warehouse", "Damaged in Warehouse", "Unused Label"]);
   });
   const [claimNotes, setClaimNotes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("claimNotes") || "{}"); } catch { return {}; }
   });
-
-  const toggleExpand = (idx, e) => {
-    e?.stopPropagation();
-    const next = new Set(expandedClaims);
-    if (next.has(idx)) next.delete(idx); else next.add(idx);
-    setExpandedClaims(next);
-  };
 
   const toggleInvestigated = (idx, e) => {
     e?.stopPropagation();
@@ -337,6 +334,8 @@ export default function Dashboard() {
     }
     return true;
   });
+
+  const selectedClaim = selectedClaimKey ? generatedClaims.find(c => getClaimKey(c) === selectedClaimKey) ?? null : null;
 
   const getCount = (type) => generatedClaims.filter(c => c.claimType === type).length;
 
@@ -695,7 +694,7 @@ export default function Dashboard() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 flex flex-col relative w-full h-full bg-white dark:bg-background">
+      <main className="flex-1 flex flex-col relative w-full h-full bg-white dark:bg-background overflow-hidden">
 
         {/* Header */}
         <header className="px-8 py-4 border-b border-slate-100 dark:border-border bg-white dark:bg-background z-10 sticky top-0 flex justify-between items-center">
@@ -740,49 +739,39 @@ export default function Dashboard() {
                     {/* Claim rows */}
                     <div>
                       {items.map(({ claim, idx }) => {
-                        const isExpanded = expandedClaims.has(idx);
                         const isInvestigated = investigatedClaims.has(idx);
                         return (
                           <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
-
-                            {/* Row */}
                             <div
-                              className={`px-8 py-3.5 flex items-center justify-between group cursor-pointer transition-colors ${isExpanded ? "bg-slate-50/80 dark:bg-muted/20" : "hover:bg-slate-50/60 dark:hover:bg-muted/10"}`}
-                              onClick={() => toggleExpand(idx)}
+                              className={`px-8 py-3.5 flex items-center justify-between group cursor-pointer transition-colors ${selectedClaimKey === getClaimKey(claim) ? "bg-slate-50/80 dark:bg-muted/20" : "hover:bg-slate-50/60 dark:hover:bg-muted/10"}`}
+                              onClick={() => setSelectedClaimKey(k => k === getClaimKey(claim) ? null : getClaimKey(claim))}
                             >
                               <div className="flex items-center gap-3.5 flex-1 min-w-0">
                                 <div onClick={e => e.stopPropagation()}>
                                   <Checkbox checked={isInvestigated} onCheckedChange={() => toggleInvestigated(idx)} className="w-3.5 h-3.5" />
                                 </div>
-                                <button onClick={e => toggleExpand(idx, e)} className="text-slate-300 hover:text-slate-600 shrink-0">
-                                  {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                                </button>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <h4 className={`font-semibold text-[13px] truncate ${isInvestigated ? "line-through text-slate-400" : "text-slate-900 dark:text-foreground"}`}>
                                       {claim.claimType.includes("Warehouse") ? `GTIN: ${claim.gtin}` : claim.poNumber ? `PO: ${claim.poNumber}` : `Inbound: ${claim.inboundId}`}
                                     </h4>
                                     <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                                      {/* Note badge — visible when not hovering and note exists */}
-                                      {notesEnabled.has(claim.claimType) && claimNotes[getClaimKey(claim)] && (
+                                      {claimNotes[getClaimKey(claim)] && (
                                         <span className="group-hover:hidden inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-600 border border-blue-100 max-w-[120px]">
                                           <NotebookPen size={9} className="shrink-0" />
                                           <span className="truncate">{claimNotes[getClaimKey(claim)]}</span>
                                         </span>
                                       )}
-                                      {/* Hover controls: Open + Copy + note input */}
                                       <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 focus-within:visible focus-within:opacity-100 flex items-center gap-1 transition-all">
                                         <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
                                         <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
-                                        {notesEnabled.has(claim.claimType) && (
-                                          <input
-                                            type="text"
-                                            className="h-5 w-28 px-2 text-[10px] rounded-md border border-slate-200 dark:border-border bg-white dark:bg-muted text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                            placeholder="Add note..."
-                                            value={claimNotes[getClaimKey(claim)] || ""}
-                                            onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
-                                          />
-                                        )}
+                                        <input
+                                          type="text"
+                                          className="h-5 w-28 px-2 text-[10px] rounded-md border border-slate-200 dark:border-border bg-white dark:bg-muted text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                          placeholder="Add note..."
+                                          value={claimNotes[getClaimKey(claim)] || ""}
+                                          onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
+                                        />
                                       </div>
                                     </div>
                                   </div>
@@ -793,8 +782,6 @@ export default function Dashboard() {
                                   </p>
                                 </div>
                               </div>
-
-                              {/* Badges */}
                               <div className="flex items-center gap-1.5 shrink-0 ml-4">
                                 {claim.reimbursementMatches?.length > 0 && (
                                   <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -810,74 +797,6 @@ export default function Dashboard() {
                                 })()}
                               </div>
                             </div>
-
-                            {/* Expanded panel */}
-                            {isExpanded && (
-                              <div className="px-16 py-6 bg-slate-50/50 dark:bg-muted/10 border-t border-slate-100 dark:border-border">
-
-                                <div className="mb-6">
-                                  <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Units & Values</p>
-                                  <div className="grid grid-cols-4 gap-x-8 gap-y-3">
-                                    {claim.claimType === "Lost in Warehouse" ? (<>
-                                      <div><p className={sectionLabel + " mb-1"}>Lost</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.lostUnits || 0}</p></div>
-                                      <div><p className={sectionLabel + " mb-1"}>Found</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.foundUnits || 0}</p></div>
-                                      <div><p className={sectionLabel + " mb-1"}>Net Loss</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.shortage || 0}</p></div>
-                                    </>) : claim.claimType === "Damaged in Warehouse" ? (
-                                      <div><p className={sectionLabel + " mb-1"}>Damaged</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.damagedUnits || 0}</p></div>
-                                    ) : (<>
-                                      <div><p className={sectionLabel + " mb-1"}>Expected</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.expectedUnits || 0}</p></div>
-                                      <div><p className={sectionLabel + " mb-1"}>Received</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.receivedUnits || 0}</p></div>
-                                      <div><p className={sectionLabel + " mb-1"}>Shortage</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.shortage || 0}</p></div>
-                                    </>)}
-                                  </div>
-                                </div>
-
-                                <div className="mb-6">
-                                  <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Identifiers</p>
-                                  <div className="grid grid-cols-3 gap-x-8 gap-y-4">
-                                    {claim.gtin && <div><p className={sectionLabel + " mb-1"}>GTIN</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.gtin}</p></div>}
-                                    {claim.sku && <div className="col-span-2"><p className={sectionLabel + " mb-1"}>SKU</p><p className="font-bold text-sm text-slate-900 dark:text-foreground truncate">{claim.sku}</p></div>}
-                                    {claim.poNumber && !claim.claimType.includes("Warehouse") && <div><p className={sectionLabel + " mb-1"}>PO Number</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.poNumber}</p></div>}
-                                    {claim.inboundId && <div><p className={sectionLabel + " mb-1"}>Inbound ID</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{claim.inboundId}</p></div>}
-                                  </div>
-                                </div>
-
-                                {claim.reimbursementMatches?.length > 0 && (
-                                  <div className="mb-6">
-                                    <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Reimbursement Details</p>
-                                    {claim.reimbursementMatches.map((m, mIdx) => (
-                                      <div key={mIdx} className="grid grid-cols-4 gap-x-8 gap-y-3 pt-2">
-                                        <div><p className={sectionLabel + " mb-1"}>Source</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">Master DB</p></div>
-                                        <div><p className={sectionLabel + " mb-1"}>Date</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{new Date(m.transactionDateTime).toLocaleDateString()}</p></div>
-                                        <div><p className={sectionLabel + " mb-1"}>Qty</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{m.quantity}</p></div>
-                                        <div><p className={sectionLabel + " mb-1"}>Amount</p><p className="font-bold text-sm text-emerald-600">${parseFloat(m.netPayable).toFixed(2)}</p></div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {notesEnabled.has(claim.claimType) && (
-                                  <div className="mb-6">
-                                    <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Note</p>
-                                    <textarea
-                                      className="w-full text-xs border border-slate-200 dark:border-border rounded-lg p-3 bg-white dark:bg-muted resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 placeholder:text-slate-300"
-                                      rows={3}
-                                      placeholder="Add a note for this claim..."
-                                      value={claimNotes[getClaimKey(claim)] || ""}
-                                      onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
-                                    />
-                                  </div>
-                                )}
-
-                                <div>
-                                  <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Actions</p>
-                                  <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => copyClaimDetails(claim)}>
-                                    <ClipboardPaste size={12} /> Copy Details for Case
-                                  </button>
-                                </div>
-
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -886,6 +805,109 @@ export default function Dashboard() {
                 ))}
             </div>
           )}
+        </div>
+
+        {/* ── Detail Side Panel ── */}
+        <div className={`absolute right-0 top-0 bottom-0 w-[400px] bg-white dark:bg-card border-l border-slate-100 dark:border-border shadow-xl z-20 flex flex-col transition-transform duration-300 ease-in-out ${selectedClaim ? "translate-x-0" : "translate-x-full"}`}>
+          {selectedClaim && (<>
+            {/* Panel header */}
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-border shrink-0">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="min-w-0">
+                  <p className={sectionLabel + " mb-1"}>{selectedClaim.claimType}</p>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-foreground truncate">
+                    {selectedClaim.claimType.includes("Warehouse") ? selectedClaim.gtin : (selectedClaim.poNumber || selectedClaim.inboundId || selectedClaim.gtin)}
+                  </h3>
+                </div>
+                <button onClick={() => setSelectedClaimKey(null)} className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-border text-slate-400 hover:text-slate-700 transition-colors shrink-0 mt-0.5">
+                  <X size={13} />
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {selectedClaim.reimbursementMatches?.length > 0 && (
+                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    Reimbursed · {selectedClaim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
+                  </span>
+                )}
+                {selectedClaim.caseStatusMatches?.length > 0 && (() => {
+                  const declined = selectedClaim.caseStatusMatches.find(c => c.status === "Declined");
+                  const cs = declined || selectedClaim.caseStatusMatches[0];
+                  return cs.status === "Declined"
+                    ? <span className="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Declined</span>
+                    : <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Pending</span>;
+                })()}
+              </div>
+            </div>
+
+            {/* Panel body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+              {/* Units & Values */}
+              <div>
+                <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Units & Values</p>
+                <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                  {selectedClaim.claimType === "Lost in Warehouse" ? (<>
+                    <div><p className={sectionLabel + " mb-1"}>Lost</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.lostUnits || 0}</p></div>
+                    <div><p className={sectionLabel + " mb-1"}>Found</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.foundUnits || 0}</p></div>
+                    <div><p className={sectionLabel + " mb-1"}>Net Loss</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.shortage || 0}</p></div>
+                  </>) : selectedClaim.claimType === "Damaged in Warehouse" ? (
+                    <div><p className={sectionLabel + " mb-1"}>Damaged</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.damagedUnits || 0}</p></div>
+                  ) : (<>
+                    <div><p className={sectionLabel + " mb-1"}>Expected</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.expectedUnits || 0}</p></div>
+                    <div><p className={sectionLabel + " mb-1"}>Received</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.receivedUnits || 0}</p></div>
+                    <div><p className={sectionLabel + " mb-1"}>Shortage</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.shortage || 0}</p></div>
+                  </>)}
+                </div>
+              </div>
+
+              {/* Identifiers */}
+              <div>
+                <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Identifiers</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  {selectedClaim.gtin && <div><p className={sectionLabel + " mb-1"}>GTIN</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.gtin}</p></div>}
+                  {selectedClaim.sku && <div><p className={sectionLabel + " mb-1"}>SKU</p><p className="font-bold text-sm text-slate-900 dark:text-foreground truncate">{selectedClaim.sku}</p></div>}
+                  {selectedClaim.poNumber && !selectedClaim.claimType.includes("Warehouse") && <div><p className={sectionLabel + " mb-1"}>PO Number</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.poNumber}</p></div>}
+                  {selectedClaim.inboundId && <div><p className={sectionLabel + " mb-1"}>Inbound ID</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.inboundId}</p></div>}
+                </div>
+              </div>
+
+              {/* Reimbursement Details */}
+              {selectedClaim.reimbursementMatches?.length > 0 && (
+                <div>
+                  <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Reimbursement Details</p>
+                  {selectedClaim.reimbursementMatches.map((m, mIdx) => (
+                    <div key={mIdx} className="grid grid-cols-2 gap-x-6 gap-y-3 pb-3 last:pb-0">
+                      <div><p className={sectionLabel + " mb-1"}>Date</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{new Date(m.transactionDateTime).toLocaleDateString()}</p></div>
+                      <div><p className={sectionLabel + " mb-1"}>Qty</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{m.quantity}</p></div>
+                      <div><p className={sectionLabel + " mb-1"}>Amount</p><p className="font-bold text-sm text-emerald-600">${parseFloat(m.netPayable).toFixed(2)}</p></div>
+                      <div><p className={sectionLabel + " mb-1"}>Source</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">Master DB</p></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Note */}
+              <div>
+                <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Note</p>
+                <textarea
+                  className="w-full text-xs border border-slate-200 dark:border-border rounded-lg p-3 bg-slate-50 dark:bg-muted resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 placeholder:text-slate-300"
+                  rows={3}
+                  placeholder="Add a note for this claim..."
+                  value={claimNotes[getClaimKey(selectedClaim)] || ""}
+                  onChange={e => updateClaimNote(getClaimKey(selectedClaim), e.target.value)}
+                />
+              </div>
+
+              {/* Actions */}
+              <div>
+                <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Actions</p>
+                <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => copyClaimDetails(selectedClaim)}>
+                  <ClipboardPaste size={12} /> Copy Details for Case
+                </button>
+              </div>
+
+            </div>
+          </>)}
         </div>
       </main>
 
