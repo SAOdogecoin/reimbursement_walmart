@@ -6,15 +6,29 @@
  */
 import "dotenv/config";
 import fs from "fs";
+import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const [,, csvPath, merchantName] = process.argv;
+const [,, csvPath, merchantNameArg] = process.argv;
 
-if (!csvPath || !merchantName) {
-  console.error("Usage: node scripts/import-csv.js <csv-path> <merchantName>");
+if (!csvPath) {
+  console.error("Usage: node scripts/import-csv.js <csv-path> [merchantName]");
+  console.error("  If merchantName is omitted, it's extracted from the filename.");
+  console.error('  Filename pattern: "WFS Claim Assistant - Master Data - {Merchant Name}.csv"');
   process.exit(1);
 }
+
+// Auto-extract from filename if not provided
+// Pattern: "WFS Claim Assistant - Master Data - Merchant Name.csv"
+const merchantName = merchantNameArg?.trim() || (() => {
+  const base = path.basename(csvPath, path.extname(csvPath));
+  const match = base.match(/Master Data - (.+)$/);
+  if (match) return match[1].trim();
+  return base; // fallback: use the whole filename minus extension
+})();
+
+console.log(`Merchant: "${merchantName}"`);
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
