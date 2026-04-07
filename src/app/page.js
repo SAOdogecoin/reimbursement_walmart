@@ -302,18 +302,48 @@ export default function Dashboard() {
     localStorage.setItem("partnerIdMap", JSON.stringify(map));
   };
 
+  const getClaimUrl = (claim) => {
+    switch (claim.claimType) {
+      case 'Inbound Discrepancy':
+      case 'Damaged Inbound':
+        if (claim.inboundId && claim.poNumber)
+          return `https://seller.walmart.com/wfs/shipments/order-details/${claim.inboundId}?tab=1&shipmentItems=${claim.poNumber}`;
+        if (claim.inboundId)
+          return `https://seller.walmart.com/wfs/shipments/order-details/${claim.inboundId}`;
+        return null;
+      case 'MTR Shortage':
+        return claim.inboundId ? `https://seller.walmart.com/wfs/shipments/order-details/${claim.inboundId}` : null;
+      case 'Lost in Warehouse':
+      case 'Damaged in Warehouse':
+        return claim.gtin ? `https://seller.walmart.com/wfs/inventory-log/${claim.gtin}` : null;
+      case 'Unused Label':
+        return claim.poNumber ? `https://seller.walmart.com/wfs/shipments?search=${claim.poNumber}` : null;
+      default:
+        return null;
+    }
+  };
+
   const openAllGtins = () => {
     const gtins = [...new Set(activeClaims.map(c => c.gtin).filter(Boolean))];
     if (!gtins.length) return toast.error("No GTINs in filtered claims.");
     if (gtins.length > 10) toast(`Opening first 10 of ${gtins.length} GTINs`);
-    gtins.slice(0, 10).forEach(g => window.open(`https://www.walmart.com/search?q=${g}`, "_blank"));
+    gtins.slice(0, 10).forEach(g => window.open(`https://seller.walmart.com/wfs/inventory-log/${g}`, "_blank"));
   };
 
   const openAllPos = () => {
-    const pos = [...new Set(activeClaims.map(c => c.poNumber).filter(Boolean))];
-    if (!pos.length) return toast.error("No PO numbers in filtered claims.");
-    navigator.clipboard.writeText(pos.join("\n"));
-    toast.success(`${pos.length} PO numbers copied`);
+    const urls = [...new Map(
+      activeClaims
+        .filter(c => c.poNumber || c.inboundId)
+        .map(c => {
+          const url = c.inboundId && c.poNumber
+            ? `https://seller.walmart.com/wfs/shipments/order-details/${c.inboundId}?tab=1&shipmentItems=${c.poNumber}`
+            : `https://seller.walmart.com/wfs/shipments?search=${c.poNumber || c.inboundId}`;
+          return [url, url];
+        })
+    ).keys()];
+    if (!urls.length) return toast.error("No PO/Inbound links in filtered claims.");
+    if (urls.length > 10) toast(`Opening first 10 of ${urls.length} links`);
+    urls.slice(0, 10).forEach(u => window.open(u, "_blank"));
   };
 
   const copyClaim = (claim) => {
@@ -850,7 +880,7 @@ export default function Dashboard() {
                             {/* Col 5: Actions */}
                             <td className="w-24 px-3 py-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
-                                <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
+                                {(() => { const url = getClaimUrl(claim); return url ? <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => window.open(url, "_blank")}>Open</button> : null; })()}
                                 <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
                               </div>
                             </td>
@@ -930,10 +960,28 @@ export default function Dashboard() {
               <div>
                 <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Identifiers</p>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                  {selectedClaim.gtin && <div><p className={sectionLabel + " mb-1"}>GTIN</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.gtin}</p></div>}
+                  {selectedClaim.gtin && (
+                    <div>
+                      <p className={sectionLabel + " mb-1"}>GTIN</p>
+                      <a href={`https://seller.walmart.com/wfs/inventory-log/${selectedClaim.gtin}`} target="_blank" rel="noopener noreferrer" className="font-bold text-sm text-blue-600 hover:underline">{selectedClaim.gtin}</a>
+                    </div>
+                  )}
                   {selectedClaim.sku && <div><p className={sectionLabel + " mb-1"}>SKU</p><p className="font-bold text-sm text-slate-900 dark:text-foreground truncate">{selectedClaim.sku}</p></div>}
-                  {selectedClaim.poNumber && !selectedClaim.claimType.includes("Warehouse") && <div><p className={sectionLabel + " mb-1"}>PO Number</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.poNumber}</p></div>}
-                  {selectedClaim.inboundId && <div><p className={sectionLabel + " mb-1"}>Inbound ID</p><p className="font-bold text-sm text-slate-900 dark:text-foreground">{selectedClaim.inboundId}</p></div>}
+                  {selectedClaim.poNumber && !selectedClaim.claimType.includes("Warehouse") && (
+                    <div>
+                      <p className={sectionLabel + " mb-1"}>PO Number</p>
+                      {selectedClaim.inboundId
+                        ? <a href={`https://seller.walmart.com/wfs/shipments/order-details/${selectedClaim.inboundId}?tab=1&shipmentItems=${selectedClaim.poNumber}`} target="_blank" rel="noopener noreferrer" className="font-bold text-sm text-blue-600 hover:underline">{selectedClaim.poNumber}</a>
+                        : <a href={`https://seller.walmart.com/wfs/shipments?search=${selectedClaim.poNumber}`} target="_blank" rel="noopener noreferrer" className="font-bold text-sm text-blue-600 hover:underline">{selectedClaim.poNumber}</a>
+                      }
+                    </div>
+                  )}
+                  {selectedClaim.inboundId && (
+                    <div>
+                      <p className={sectionLabel + " mb-1"}>Inbound ID</p>
+                      <a href={`https://seller.walmart.com/wfs/shipments/order-details/${selectedClaim.inboundId}`} target="_blank" rel="noopener noreferrer" className="font-bold text-sm text-blue-600 hover:underline">{selectedClaim.inboundId}</a>
+                    </div>
+                  )}
                 </div>
               </div>
 
