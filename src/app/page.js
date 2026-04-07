@@ -692,8 +692,8 @@ export default function Dashboard() {
               <span className="text-[10px] text-slate-500 font-medium">Auto crosscheck</span>
             </label>
           </div>
-          <Select value={selectedMerchant} onValueChange={setSelectedMerchant}>
-            <SelectTrigger className="bg-slate-50 dark:bg-muted border-slate-200 dark:border-border text-sm">
+          <Select value={selectedMerchant} onValueChange={setSelectedMerchant} disabled={autoCheck}>
+            <SelectTrigger className="bg-slate-50 dark:bg-muted border-slate-200 dark:border-border text-sm disabled:opacity-40 disabled:cursor-not-allowed">
               <SelectValue placeholder="Select database target..." />
             </SelectTrigger>
             <SelectContent>
@@ -704,7 +704,7 @@ export default function Dashboard() {
           <button
             className="w-full mt-3 inline-flex items-center justify-center gap-2 h-9 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 transition-colors"
             onClick={() => handleCrosscheck()}
-            disabled={isLoading}
+            disabled={isLoading || autoCheck}
           >
             <RefreshCcw size={13} /> Run Crosscheck
           </button>
