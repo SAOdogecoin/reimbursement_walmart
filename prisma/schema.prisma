@@ -12,6 +12,9 @@ model SettlementClaim {
   transactionType     String
   reasonCode          String?
   wfsReferenceId      String
+  walmartPoNumber     String?
+  partnerGtin         String?
+  quantity            Int      @default(1)
   netPayable          Float
   transactionDateTime DateTime
   createdAt           DateTime @default(now())
