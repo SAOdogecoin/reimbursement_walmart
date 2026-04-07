@@ -19,11 +19,14 @@ export async function processSettlementFile(formData) {
     if (!merchantName) return { success: false, error: "Merchant name is missing. Select or enter a client name before uploading." };
 
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = xlsx.read(arrayBuffer, { type: "buffer" });
+    // cellText:true ensures cell.w is always populated with the original display/source string.
+    // For CSV files cell.w = the literal text in the CSV (e.g. "850036463405" or "8.50036E+11").
+    // This is critical for GTIN precision — we must read w before v to catch full-precision values.
+    const workbook = xlsx.read(arrayBuffer, { type: "buffer", cellText: true });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+    const data = xlsx.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
     let headerRowIndex = -1;
     let headers = [];
@@ -64,35 +67,41 @@ export async function processSettlementFile(formData) {
     const parsedRows = [];
     const warnings = [];
 
-    // Read GTIN directly from the sheet cell to avoid scientific notation precision loss.
-    // xlsx parses "8.50036E+11" from CSV text as 850036000000 (truncated). Direct cell
-    // access gives us cell.v which, for XLSX files, is the full precise integer.
+    // GTIN precision strategy:
+    // 1. cell.w = original text from CSV / formatted text from XLSX (populated by cellText:true)
+    //    → "850036463405"  ← full precision if source wrote it as a plain number string
+    //    → "8.50036E+11"   ← scientific notation if source truncated it (unrecoverable)
+    // 2. cell.v = parsed numeric value — may be truncated for scientific-notation CSV cells
+    // We prefer cell.w when it is a clean integer string (no E notation).
     const getGtinFromCell = (rowIdx) => {
       if (gtinColIndex < 0) return '';
       const addr = xlsx.utils.encode_cell({ r: rowIdx, c: gtinColIndex });
       const cell = sheet[addr];
-      if (!cell || cell.v == null) return '';
+      if (!cell || (cell.v == null && !cell.w)) return '';
+
+      // --- Prefer cell.w (original source string) ---
+      if (cell.w) {
+        const w = cell.w.trim().replace(/,/g, '').replace(/\s/g, '');
+        // Full integer string with no E notation → use directly (full precision)
+        if (/^\d+$/.test(w)) return w;
+        // Scientific notation in the source → precision already lost at export time
+        if (/[eE]/.test(w)) {
+          const numStr = String(Math.round(parseFloat(w)));
+          warnings.push(`GTIN ${numStr} is truncated — source file stored it as scientific notation (${w}). To fix: in Excel/Sheets, format the GTIN column as Text, then re-export to CSV.`);
+          return numStr;
+        }
+      }
+
+      // --- Fallback: cell.v (parsed number) ---
       if (cell.t === 'n') {
-        // For XLSX: cell.v is the precise stored number (safe for integers < 2^53)
-        // For CSV: xlsx already parsed the scientific notation, precision may be lost
         const numStr = String(Math.round(cell.v));
-        // Flag suspicious GTINs: if a 10+ digit number ends in 4+ zeros it was likely
-        // scientific-notation in the source CSV (e.g. 850036000000 vs 850036463405)
         if (numStr.length >= 10 && /0{4,}$/.test(numStr)) {
-          warnings.push(`GTIN ${numStr} may be truncated (scientific notation in source CSV). Format GTIN column as Text in Excel before exporting.`);
+          warnings.push(`GTIN ${numStr} may be truncated. Format the GTIN column as Text in Excel before exporting to CSV.`);
         }
         return numStr;
       }
-      if (cell.t === 's') {
-        const s = cell.v.trim().replace(/,/g, '');
-        if (/^[\d.]+[eE][+\-]?\d+$/i.test(s)) {
-          const numStr = String(Math.round(parseFloat(s)));
-          warnings.push(`GTIN ${numStr} may be truncated — source cell was in scientific notation (${s}). Format GTIN column as Text in Excel.`);
-          return numStr;
-        }
-        return s.replace(/[^0-9]/g, '');
-      }
-      return String(cell.v);
+      if (cell.t === 's') return (cell.v || '').trim().replace(/[^0-9]/g, '');
+      return String(cell.v || '');
     };
 
     const dataRows = data.slice(headerRowIndex + 1);
