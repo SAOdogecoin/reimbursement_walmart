@@ -41,6 +41,11 @@ export async function processSettlementFile(formData) {
     const refIdColIndex = headers.findIndex(h => h.includes('wfsreferenceid'));
     const netPayColIndex = headers.indexOf('net payable');
     const dateColIndex = headers.indexOf('transaction date/time');
+    
+    // Additional essential columns for accurate crossmatching
+    const poColIndex = headers.findIndex(h => h.includes('walmart.com po #'));
+    const gtinColIndex = headers.findIndex(h => h.includes('partner gtin') || h === 'gtin');
+    const qtyColIndex = headers.findIndex(h => h === 'qty' || h === 'quantity');
 
     if (refIdColIndex === -1 || netPayColIndex === -1 || dateColIndex === -1) {
        return { success: false, error: "Missing required columns: WFSReferenceID, Net Payable, or Transaction Date/Time" };
@@ -69,6 +74,9 @@ export async function processSettlementFile(formData) {
       if (!wfsReferenceId) continue;
       
       let netPayable = parseFloat(netPayableStr.replace(/[^0-9.-]+/g,""));
+      const poVal = poColIndex > -1 ? String(row[poColIndex] || "").trim() : "";
+      const gtinVal = gtinColIndex > -1 ? String(row[gtinColIndex] || "").trim() : "";
+      const qtyVal = qtyColIndex > -1 ? parseInt(row[qtyColIndex]) : 1;
       
       let transactionDateTime;
       if (typeof dateVal === 'number') {
@@ -82,6 +90,9 @@ export async function processSettlementFile(formData) {
           transactionType,
           reasonCode,
           wfsReferenceId,
+          walmartPoNumber: poVal,
+          partnerGtin: gtinVal,
+          quantity: isNaN(qtyVal) ? 1 : qtyVal,
           netPayable: isNaN(netPayable) ? 0 : netPayable,
           transactionDateTime: isNaN(transactionDateTime.getTime()) ? new Date() : transactionDateTime
       });
