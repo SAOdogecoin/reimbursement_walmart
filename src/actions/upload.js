@@ -65,7 +65,7 @@ export async function processSettlementFile(formData) {
 
     const relevantTransactionTypes = new Set(['Refund', 'LostInventory', 'DamageInWarehouse', 'InboundTransportationFee']);
     const parsedRows = [];
-    const warnings = [];
+    let truncatedGtinCount = 0;
 
     // GTIN precision strategy:
     // 1. cell.w = original text from CSV / formatted text from XLSX (populated by cellText:true)
@@ -86,18 +86,15 @@ export async function processSettlementFile(formData) {
         if (/^\d+$/.test(w)) return w;
         // Scientific notation in the source → precision already lost at export time
         if (/[eE]/.test(w)) {
-          const numStr = String(Math.round(parseFloat(w)));
-          warnings.push(`GTIN ${numStr} is truncated — source file stored it as scientific notation (${w}). To fix: in Excel/Sheets, format the GTIN column as Text, then re-export to CSV.`);
-          return numStr;
+          truncatedGtinCount++;
+          return String(Math.round(parseFloat(w)));
         }
       }
 
       // --- Fallback: cell.v (parsed number) ---
       if (cell.t === 'n') {
         const numStr = String(Math.round(cell.v));
-        if (numStr.length >= 10 && /0{4,}$/.test(numStr)) {
-          warnings.push(`GTIN ${numStr} may be truncated. Format the GTIN column as Text in Excel before exporting to CSV.`);
-        }
+        if (numStr.length >= 10 && /0{4,}$/.test(numStr)) truncatedGtinCount++;
         return numStr;
       }
       if (cell.t === 's') return (cell.v || '').trim().replace(/[^0-9]/g, '');
@@ -178,7 +175,10 @@ export async function processSettlementFile(formData) {
         return { success: false, error: `Database insert error: ${msg.slice(0, 120)}` };
     }
 
-    return { success: true, added, skipped, warnings: [...new Set(warnings)] };
+    const warnings = truncatedGtinCount > 0
+      ? [`${truncatedGtinCount} GTIN${truncatedGtinCount > 1 ? 's' : ''} stored with truncated values — source file has scientific notation in the GTIN column (e.g. 8.50036E+11 instead of 850036463405). Fix: format the GTIN column as Text in Excel/Sheets before exporting to CSV.`]
+      : [];
+    return { success: true, added, skipped, warnings };
     
   } catch (error) {
     console.error("Upload error:", error);

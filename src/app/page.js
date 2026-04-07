@@ -12,7 +12,7 @@ import {
   FileSpreadsheet, FolderOpen, FileText, SlidersHorizontal, RefreshCcw,
   Download, UploadCloud, Moon, Sun, Table2, ChevronRight, ChevronDown,
   ClipboardPaste, ExternalLink, Database, SlidersVertical, NotebookPen,
-  Palette, X, CheckCircle2, AlertCircle, Loader2, Plus
+  Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
@@ -203,7 +203,7 @@ export default function Dashboard() {
       });
 
       setGeneratedClaims(newClaims);
-      toast.success(selectedMerchant === "__all__" ? "Crosscheck complete (all clients)" : `Crosscheck complete for ${selectedMerchant}`);
+      toast.success("Crosscheck complete");
     } catch (err) {
       console.error(err);
       toast.error("Crosscheck failed.");
@@ -252,29 +252,20 @@ export default function Dashboard() {
       const result = await processSettlementFile(formData);
       const status = result.error ? "error" : "done";
       setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status, result } : i));
-      if (result.error) {
-        toast.error(`${item.file.name}: ${result.error}`);
-      } else {
-        toast.success(`${clientName}: +${result.added} rows, ${result.skipped} skipped`);
-        if (result.warnings?.length) {
-          result.warnings.forEach(w => toast.warning(`⚠ ${w}`, { duration: 8000 }));
-        }
-      }
+      // Only toast on success — errors and warnings shown inline in the queue row
+      if (!result.error) toast.success(`${clientName} — ${result.added} rows added`);
       return { ...item, status, result };
     } catch (err) {
       const msg = err?.message || "Network or server error";
       setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: "error", result: { error: msg } } : i));
-      toast.error(`${item.file.name}: ${msg}`);
     }
   };
 
   const handleUploadAll = async () => {
     const pending = uploadQueue.filter(i => i.status === "pending" || i.status === "error");
-    if (!pending.length) return toast("No pending files to upload.");
+    if (!pending.length) return;
     setIsLoading(true);
-    for (const item of pending) {
-      await uploadQueueItem(item);
-    }
+    for (const item of pending) await uploadQueueItem(item);
     getMerchants().then(setMerchants);
     setIsLoading(false);
   };
@@ -418,14 +409,15 @@ export default function Dashboard() {
                               <div key={item.id} className={`flex items-center gap-2.5 px-3 py-2.5 ${i !== 0 ? "border-t border-slate-50 dark:border-border" : ""}`}>
                                 {/* Status icon */}
                                 <div className="shrink-0 w-4 flex justify-center">
-                                  {item.status === "done" && <CheckCircle2 size={14} className="text-emerald-500" />}
-                                  {item.status === "error" && <AlertCircle size={14} className="text-red-400" />}
-                                  {item.status === "uploading" && <Loader2 size={14} className="animate-spin text-slate-400" />}
-                                  {item.status === "pending" && <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />}
+                                  {item.status === "done"      && <CheckCircle2 size={13} className="text-emerald-500" />}
+                                  {item.status === "error"     && <AlertCircle  size={13} className="text-red-400" />}
+                                  {item.status === "uploading" && <Loader2      size={13} className="animate-spin text-slate-400" />}
+                                  {item.status === "pending"   && <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />}
                                 </div>
-                                {/* Filename */}
+
+                                {/* Filename + editable client name */}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] text-slate-500 truncate">{item.file.name}</p>
+                                  <p className="text-[11px] text-slate-400 truncate leading-none mb-0.5">{item.file.name}</p>
                                   <input
                                     className="text-xs font-semibold text-slate-800 dark:text-foreground bg-transparent border-none outline-none w-full truncate placeholder:text-slate-300"
                                     value={item.clientName}
@@ -434,17 +426,36 @@ export default function Dashboard() {
                                     disabled={item.status === "uploading" || item.status === "done"}
                                   />
                                 </div>
-                                {/* Result */}
-                                {item.result && !item.result.error && (
-                                  <span className="text-[10px] text-emerald-600 font-semibold shrink-0">+{item.result.added}</span>
+
+                                {/* Rows added */}
+                                {item.status === "done" && item.result && !item.result.error && (
+                                  <span className="text-[10px] text-emerald-600 font-bold shrink-0">+{item.result.added}</span>
                                 )}
+
+                                {/* Warning tooltip (orange !) — shown on done rows with warnings */}
+                                {item.result?.warnings?.length > 0 && (
+                                  <div className="relative group/warn shrink-0">
+                                    <AlertTriangle size={13} className="text-orange-400 cursor-help" />
+                                    <div className="absolute right-0 bottom-full mb-2 w-72 bg-slate-900 text-white text-[11px] leading-relaxed rounded-lg px-3 py-2.5 shadow-xl hidden group-hover/warn:block z-50 pointer-events-none">
+                                      {item.result.warnings[0]}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Error tooltip (red !) — inline, no toast */}
                                 {item.result?.error && (
-                                  <span className="text-[10px] text-red-400 font-semibold shrink-0 max-w-[80px] truncate">{item.result.error}</span>
+                                  <div className="relative group/err shrink-0">
+                                    <AlertCircle size={13} className="text-red-400 cursor-help" />
+                                    <div className="absolute right-0 bottom-full mb-2 w-72 bg-slate-900 text-white text-[11px] leading-relaxed rounded-lg px-3 py-2.5 shadow-xl hidden group-hover/err:block z-50 pointer-events-none">
+                                      {item.result.error}
+                                    </div>
+                                  </div>
                                 )}
+
                                 {/* Remove */}
                                 {item.status !== "uploading" && (
-                                  <button onClick={() => removeFromQueue(item.id)} className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors">
-                                    <X size={12} />
+                                  <button onClick={() => removeFromQueue(item.id)} className="shrink-0 text-slate-200 hover:text-slate-500 transition-colors ml-0.5">
+                                    <X size={11} />
                                   </button>
                                 )}
                               </div>
