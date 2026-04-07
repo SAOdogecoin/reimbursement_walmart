@@ -743,7 +743,7 @@ export default function Dashboard() {
                         const isExpanded = expandedClaims.has(idx);
                         const isInvestigated = investigatedClaims.has(idx);
                         return (
-                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity group/row ${isInvestigated ? "opacity-40" : ""}`}>
+                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
 
                             {/* Row */}
                             <div
@@ -762,9 +762,28 @@ export default function Dashboard() {
                                     <h4 className={`font-semibold text-[13px] truncate ${isInvestigated ? "line-through text-slate-400" : "text-slate-900 dark:text-foreground"}`}>
                                       {claim.claimType.includes("Warehouse") ? `GTIN: ${claim.gtin}` : claim.poNumber ? `PO: ${claim.poNumber}` : `Inbound: ${claim.inboundId}`}
                                     </h4>
-                                    <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all shrink-0" onClick={e => e.stopPropagation()}>
-                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
-                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
+                                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                      {/* Note badge — visible when not hovering and note exists */}
+                                      {notesEnabled.has(claim.claimType) && claimNotes[getClaimKey(claim)] && (
+                                        <span className="group-hover:hidden inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-600 border border-blue-100 max-w-[120px]">
+                                          <NotebookPen size={9} className="shrink-0" />
+                                          <span className="truncate">{claimNotes[getClaimKey(claim)]}</span>
+                                        </span>
+                                      )}
+                                      {/* Hover controls: Open + Copy + note input */}
+                                      <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 focus-within:visible focus-within:opacity-100 flex items-center gap-1 transition-all">
+                                        <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
+                                        <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
+                                        {notesEnabled.has(claim.claimType) && (
+                                          <input
+                                            type="text"
+                                            className="h-5 w-28 px-2 text-[10px] rounded-md border border-slate-200 dark:border-border bg-white dark:bg-muted text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                                            placeholder="Add note..."
+                                            value={claimNotes[getClaimKey(claim)] || ""}
+                                            onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
+                                          />
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                   <p className="text-[11px] text-slate-400 mt-0.5 truncate">
@@ -791,19 +810,6 @@ export default function Dashboard() {
                                 })()}
                               </div>
                             </div>
-
-                            {/* Inline hover note */}
-                            {notesEnabled.has(claim.claimType) && !isExpanded && (
-                              <div className="px-16 pb-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                <textarea
-                                  className="w-full text-xs border border-slate-200 dark:border-border rounded-lg px-3 py-2 bg-slate-50 dark:bg-muted resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 placeholder:text-slate-300"
-                                  rows={1}
-                                  placeholder="Add a note..."
-                                  value={claimNotes[getClaimKey(claim)] || ""}
-                                  onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
-                                />
-                              </div>
-                            )}
 
                             {/* Expanded panel */}
                             {isExpanded && (
