@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import * as xlsx from "xlsx";
-import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
+import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses, importCaseStatuses } from "@/actions/upload";
 import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaims } from "@/lib/parser";
 
 export default function Dashboard() {
@@ -66,7 +66,18 @@ export default function Dashboard() {
     setInvestigatedClaims(next);
   };
 
+  // Unique key for UI selection (includes claimType to distinguish Lost vs Damaged for same GTIN)
   const getClaimKey = (claim) => `${claim.claimType}|${claim.poNumber || ''}|${claim.gtin || ''}|${claim.inboundId || ''}`;
+
+  // Note key matches original logic: warehouse notes tied to GTIN only (persist across reports),
+  // inbound notes tied to PO+GTIN, unused label notes tied to PO
+  const getNoteKey = (claim) => {
+    if (['Inbound Discrepancy', 'Damaged Inbound', 'MTR Shortage'].includes(claim.claimType))
+      return `NOTE|${claim.poNumber || claim.inboundId}|${claim.gtin}`;
+    if (['Lost in Warehouse', 'Damaged in Warehouse'].includes(claim.claimType))
+      return `NOTE|WH|${claim.gtin}`;
+    return `NOTE|LABEL|${claim.poNumber}`;
+  };
 
   const toggleNoteCategory = (cat) => {
     const next = new Set(notesEnabled);
@@ -104,9 +115,45 @@ export default function Dashboard() {
     e.target.value = "";
   };
 
+  const handleCaseStatusImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    setIsLoading(true);
+    try {
+      const data = await parseFile(file);
+      if (!data || data.length < 2) { toast.error("Empty or invalid file."); setIsLoading(false); return; }
+      const headers = data[0].map(h => String(h || '').trim().toLowerCase());
+      const caseIdIdx = headers.findIndex(h => h.includes('case') && (h.includes('id') || h.includes('#') || h.includes('number')));
+      const gtinIdx = headers.findIndex(h => h === 'gtin' || h.includes('partner gtin') || h.includes('item id') || h.includes('item number'));
+      const statusIdx = headers.findIndex(h => h.includes('status') || h.includes('state'));
+      if (caseIdIdx === -1) { toast.error("Case ID column not found. Expected a column with 'Case' and 'ID'/'#'."); setIsLoading(false); return; }
+      if (gtinIdx === -1) { toast.error("GTIN column not found."); setIsLoading(false); return; }
+      if (statusIdx === -1) { toast.error("Status column not found."); setIsLoading(false); return; }
+      const rows = data.slice(1).map(row => {
+        const caseId = String(row[caseIdIdx] || '').trim();
+        const gtin = String(row[gtinIdx] || '').trim().replace(/^0+/, '');
+        const raw = String(row[statusIdx] || '').trim().toLowerCase();
+        const status = raw.includes('declined') || raw.includes('rejected') ? 'Declined'
+          : raw.includes('progress') || raw.includes('pending') || raw.includes('open') || raw.includes('active') ? 'Pending'
+          : String(row[statusIdx] || '').trim();
+        return { caseId, gtin, status };
+      }).filter(r => r.caseId && r.gtin);
+      if (!rows.length) { toast.error("No valid rows found after parsing."); setIsLoading(false); return; }
+      const result = await importCaseStatuses(rows);
+      toast.success(`Case statuses: ${result.added} imported, ${result.skipped} skipped`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to import case statuses.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // File References
   const multiFileInputRef = useRef(null);
   const settlementFileInputRef = useRef(null);
+  const caseImportRef = useRef(null);
 
   // Filters State
   const [filters, setFilters] = useState(() => {
@@ -384,7 +431,7 @@ export default function Dashboard() {
   const selectedClaim = selectedClaimKey ? generatedClaims.find(c => getClaimKey(c) === selectedClaimKey) ?? null : null;
   const [noteEdit, setNoteEdit] = useState("");
   useEffect(() => {
-    setNoteEdit(selectedClaim ? claimNotes[getClaimKey(selectedClaim)] || "" : "");
+    setNoteEdit(selectedClaim ? claimNotes[getNoteKey(selectedClaim)] || "" : "");
   }, [selectedClaimKey]);
 
   const generateDisputeXlsx = (claim) => {
@@ -619,6 +666,20 @@ export default function Dashboard() {
                             if (name && pid) { savePartnerIdMap({ ...partnerIdMap, [pid]: name }); document.getElementById("new-pid-name").value = ""; document.getElementById("new-pid-id").value = ""; }
                           }}>Add</button>
                         </div>
+                      </div>
+
+                      {/* Case Status Import */}
+                      <div className="border-t border-slate-100 dark:border-border pt-5">
+                        <h3 className="font-semibold text-sm text-slate-900 dark:text-foreground mb-0.5">Case Status Import</h3>
+                        <p className="text-xs text-slate-400 mb-3">Upload a Walmart Case Export CSV to sync Declined / Pending statuses. Required columns: <span className="font-mono text-slate-500">Case ID</span>, <span className="font-mono text-slate-500">GTIN</span>, <span className="font-mono text-slate-500">Status</span>.</p>
+                        <button
+                          onClick={() => caseImportRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          <UploadCloud size={12} /> Import Case Export
+                        </button>
+                        <input type="file" ref={caseImportRef} className="hidden" accept=".csv,.xlsx" onChange={handleCaseStatusImport} />
+                        <p className="text-[11px] text-slate-400 mt-2">Status values containing "declined"/"rejected" → Declined. "pending"/"in progress"/"open"/"active" → Pending.</p>
                       </div>
                     </div>
                   )}
@@ -917,10 +978,10 @@ export default function Dashboard() {
                             </td>
                             {/* Col 6: Note pill */}
                             <td className="w-36 px-3 py-2">
-                              {claimNotes[getClaimKey(claim)] && (
+                              {claimNotes[getNoteKey(claim)] && (
                                 <span className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-600 border border-blue-100 max-w-full truncate">
                                   <NotebookPen size={9} className="shrink-0" />
-                                  <span className="truncate">{claimNotes[getClaimKey(claim)]}</span>
+                                  <span className="truncate">{claimNotes[getNoteKey(claim)]}</span>
                                 </span>
                               )}
                             </td>
@@ -1042,17 +1103,17 @@ export default function Dashboard() {
                   onChange={e => setNoteEdit(e.target.value)}
                 />
                 <div className="flex items-center justify-between mt-2">
-                  {claimNotes[getClaimKey(selectedClaim)] !== noteEdit && (
+                  {claimNotes[getNoteKey(selectedClaim)] !== noteEdit && (
                     <button
                       className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
-                      onClick={() => setNoteEdit(claimNotes[getClaimKey(selectedClaim)] || "")}
+                      onClick={() => setNoteEdit(claimNotes[getNoteKey(selectedClaim)] || "")}
                     >Discard</button>
                   )}
                   <div className="flex-1" />
                   <button
                     className="inline-flex items-center h-7 px-3 text-[11px] font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors disabled:opacity-40"
-                    disabled={noteEdit === (claimNotes[getClaimKey(selectedClaim)] || "")}
-                    onClick={() => updateClaimNote(getClaimKey(selectedClaim), noteEdit)}
+                    disabled={noteEdit === (claimNotes[getNoteKey(selectedClaim)] || "")}
+                    onClick={() => updateClaimNote(getNoteKey(selectedClaim), noteEdit)}
                   >Save</button>
                 </div>
               </div>
