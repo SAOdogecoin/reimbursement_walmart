@@ -527,16 +527,33 @@ export default function Dashboard() {
             </div>
         </header>
         
-        <div className="p-8 flex-1 overflow-y-auto w-full max-w-[1400px]">
+        <div className="flex-1 overflow-y-auto w-full max-w-[1400px]">
             {activeClaims.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground w-full">
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground w-full p-8">
                     <FileText size={64} className="opacity-20 mb-4" />
                     <h3 className="text-lg font-medium">No Claims Found</h3>
                     <p className="text-sm opacity-70">Use the panel on the left to upload your reports to begin.</p>
                 </div>
             ) : (
-                <div className="space-y-0 w-full rounded-xl overflow-hidden border">
-                    {activeClaims.map((claim, idx) => {
+                <div className="w-full pb-8">
+                    {["Inbound Discrepancy","Damaged Inbound","MTR Shortage","Lost in Warehouse","Damaged in Warehouse","Unused Label"]
+                      .map(type => ({
+                        type,
+                        items: activeClaims.map((claim, idx) => ({ claim, idx })).filter(({ claim }) => claim.claimType === type)
+                      }))
+                      .filter(g => g.items.length > 0)
+                      .map(({ type, items }) => (
+                        <div key={type} className="w-full">
+                            {/* Sticky category header */}
+                            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-8 py-3 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <h3 className="font-semibold text-sm">{type}</h3>
+                                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{items.length}</span>
+                                </div>
+                            </div>
+                            {/* Claims in this category */}
+                            <div className="border-b">
+                    {items.map(({ claim, idx }) => {
                         const isExpanded = expandedClaims.has(idx);
                         const isInvestigated = investigatedClaims.has(idx);
                         
@@ -656,6 +673,9 @@ export default function Dashboard() {
                             </div>
                         );
                     })}
+                            </div>
+                        </div>
+                      ))}
                 </div>
             )}
         </div>
