@@ -12,7 +12,7 @@ import {
   FileSpreadsheet, FolderOpen, FileText, SlidersHorizontal, RefreshCcw,
   Download, UploadCloud, Moon, Sun, Table2, ChevronRight, ChevronDown,
   ClipboardPaste, ExternalLink, Database, SlidersVertical, NotebookPen,
-  Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff
+  Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff, Package
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
@@ -360,9 +360,14 @@ export default function Dashboard() {
 
         {/* Header */}
         <div className="flex justify-between items-center py-1">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">WFS Assistant</h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-0.5">Claim Filing</p>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+              <Package size={15} className="text-white" strokeWidth={2.2} />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">WFS Assistant</h1>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-0.5">Claim Filing</p>
+            </div>
           </div>
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
             <DialogTrigger asChild>
