@@ -183,19 +183,52 @@ export default function Dashboard() {
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader><DialogTitle>Settings</DialogTitle></DialogHeader>
-                    <div className="space-y-6 mt-4">
+                    <div className="space-y-5 mt-4">
                         <div className="flex justify-between items-center pb-4 border-b">
-                            <span className="font-medium">Update Settlement Data</span>
+                            <span className="font-medium text-sm">Update Settlement Data</span>
                             <div className="relative">
-                                <Button variant="outline" size="sm" onClick={() => settlementFileInputRef.current?.click()}><Table2 className="mr-2 h-4 w-4"/>Manage DB</Button>
+                                <Button variant="outline" size="sm" onClick={() => settlementFileInputRef.current?.click()} className="rounded-xl"><Table2 className="mr-2 h-4 w-4"/>Manage DB</Button>
                                 <input type="file" ref={settlementFileInputRef} className="hidden" accept=".csv,.xlsx" onChange={handleSettlementUpload} />
                             </div>
                         </div>
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center border-b pb-4">
                             <Label>Hide Fully Reimbursed Claims</Label>
                             <Switch checked={toggles.hideReimbursed} onCheckedChange={(v) => setToggles({...toggles, hideReimbursed: v})} />
                         </div>
-                        <div className="flex justify-between items-center pb-4 border-b">
+                        <div className="flex justify-between items-center border-b pb-4">
+                            <Label>Mark as Investigated on Export</Label>
+                            <Switch checked={toggles.markInvestigated} onCheckedChange={(v) => setToggles({...toggles, markInvestigated: v})} />
+                        </div>
+                        <div className="flex justify-between items-center border-b pb-4">
+                            <Label>Show Report Date Range</Label>
+                            <Switch checked={toggles.showDate} onCheckedChange={(v) => setToggles({...toggles, showDate: v})} />
+                        </div>
+                        
+                        <div className="border-b pb-4">
+                            <Label className="text-blue-500 font-bold">Note Management</Label>
+                            <p className="text-xs text-muted-foreground mt-1 mb-3">Enable editing notes for specific categories:</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                {["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage", "Lost in Warehouse", "Damaged in Warehouse", "Unused Label"].map(cat => (
+                                    <div key={cat} className="flex justify-between items-center bg-muted/30 p-2 rounded-lg border">
+                                        <span className="text-xs font-medium">{cat}</span>
+                                        <Switch className="scale-75" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center border-b pb-4">
+                            <div className="flex flex-col">
+                                <Label>Sync Notes</Label>
+                                <span className="text-xs text-muted-foreground">(Import/Export)</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" className="h-7 text-xs px-2"><Download className="mr-1.5 h-3 w-3"/>Export</Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs px-2"><UploadCloud className="mr-1.5 h-3 w-3"/>Import</Button>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center">
                             <Label>Theme</Label>
                             <div className="flex gap-2 items-center">
                                 <Sun size={14}/>
