@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -726,7 +726,7 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Claims List */}
+        {/* Claims Table */}
         <div className="flex-1 overflow-y-auto w-full">
           {activeClaims.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-8">
@@ -737,87 +737,101 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400">Upload InboundReceipt or Reconciliation files from the left panel.</p>
             </div>
           ) : (
-            <div className="w-full pb-12">
-              {CATEGORIES
-                .map(type => ({ type, items: activeClaims.map((claim, idx) => ({ claim, idx })).filter(({ claim }) => claim.claimType === type) }))
-                .filter(g => g.items.length > 0)
-                .map(({ type, items }) => (
-                  <div key={type} className="w-full">
-                    {/* Sticky category header */}
-                    <div className="sticky top-0 z-10 bg-white/95 dark:bg-background/95 backdrop-blur border-b border-slate-100 dark:border-border px-8 py-2.5 flex items-center gap-2.5">
-                      <span className="w-1 h-3.5 rounded-full bg-slate-900 dark:bg-foreground inline-block shrink-0" />
-                      <span className={`${sectionLabel}`}>{type}</span>
-                      <span className="text-[10px] font-bold text-slate-300 dark:text-muted-foreground">{items.length}</span>
-                    </div>
-
-                    {/* Claim rows */}
-                    <div>
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 z-10 bg-white dark:bg-background border-b border-slate-100 dark:border-border">
+                <tr>
+                  <th className="w-9 px-3 py-2" />
+                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identifier</th>
+                  <th className="w-20 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Qty</th>
+                  <th className="w-40 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="w-24 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Actions</th>
+                  <th className="w-44 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIES
+                  .map(type => ({ type, items: activeClaims.map((claim, idx) => ({ claim, idx })).filter(({ claim }) => claim.claimType === type) }))
+                  .filter(g => g.items.length > 0)
+                  .map(({ type, items }) => (
+                    <React.Fragment key={type}>
+                      {/* Category divider row */}
+                      <tr className="sticky top-8 z-[9]">
+                        <td colSpan={6} className="bg-white/95 dark:bg-background/95 backdrop-blur border-y border-slate-100 dark:border-border px-3 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1 h-3 rounded-full bg-slate-800 dark:bg-foreground inline-block" />
+                            <span className={sectionLabel}>{type}</span>
+                            <span className="text-[10px] font-bold text-slate-300 dark:text-muted-foreground">{items.length}</span>
+                          </div>
+                        </td>
+                      </tr>
                       {items.map(({ claim, idx }) => {
                         const isInvestigated = investigatedClaims.has(idx);
+                        const isSelected = selectedClaimKey === getClaimKey(claim);
                         return (
-                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
-                            <div
-                              className={`px-8 py-3.5 flex items-center justify-between group cursor-pointer transition-colors ${selectedClaimKey === getClaimKey(claim) ? "bg-slate-50/80 dark:bg-muted/20" : "hover:bg-slate-50/60 dark:hover:bg-muted/10"}`}
-                              onClick={() => setSelectedClaimKey(k => k === getClaimKey(claim) ? null : getClaimKey(claim))}
-                            >
-                              <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                                <div onClick={e => e.stopPropagation()}>
-                                  <Checkbox checked={isInvestigated} onCheckedChange={() => toggleInvestigated(idx)} className="w-3.5 h-3.5" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <h4 className={`font-semibold text-[13px] truncate ${isInvestigated ? "line-through text-slate-400" : "text-slate-900 dark:text-foreground"}`}>
-                                      {claim.claimType.includes("Warehouse") ? `GTIN: ${claim.gtin}` : claim.poNumber ? `PO: ${claim.poNumber}` : `Inbound: ${claim.inboundId}`}
-                                    </h4>
-                                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                                      {claimNotes[getClaimKey(claim)] && (
-                                        <span className="group-hover:hidden inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-600 border border-blue-100 max-w-[120px]">
-                                          <NotebookPen size={9} className="shrink-0" />
-                                          <span className="truncate">{claimNotes[getClaimKey(claim)]}</span>
-                                        </span>
-                                      )}
-                                      <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 focus-within:visible focus-within:opacity-100 flex items-center gap-1 transition-all">
-                                        <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
-                                        <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
-                                        <input
-                                          type="text"
-                                          className="h-5 w-28 px-2 text-[10px] rounded-md border border-slate-200 dark:border-border bg-white dark:bg-muted text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                                          placeholder="Add note..."
-                                          value={claimNotes[getClaimKey(claim)] || ""}
-                                          onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                                    {claim.claimType === "Lost in Warehouse" ? "Net Loss" : claim.claimType === "Damaged in Warehouse" ? "Damaged" : "Discrepancy"}:
-                                    <span className="font-semibold text-slate-600 dark:text-slate-300 ml-1">{claim.shortage || claim.damagedUnits || 0} units</span>
-                                    {claim.gtin && !claim.claimType.includes("Warehouse") ? ` · GTIN ${claim.gtin}` : ""}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                          <tr
+                            key={idx}
+                            className={`border-b border-slate-50 dark:border-border cursor-pointer transition-colors ${isInvestigated ? "opacity-40" : ""} ${isSelected ? "bg-blue-50/50 dark:bg-muted/30" : "hover:bg-slate-50/70 dark:hover:bg-muted/10"}`}
+                            onClick={() => setSelectedClaimKey(k => k === getClaimKey(claim) ? null : getClaimKey(claim))}
+                          >
+                            {/* Col 1: Checkbox */}
+                            <td className="w-9 px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <Checkbox checked={isInvestigated} onCheckedChange={() => toggleInvestigated(idx)} className="w-3.5 h-3.5" />
+                            </td>
+                            {/* Col 2: Identifier */}
+                            <td className="px-3 py-2 min-w-0 max-w-0">
+                              <p className={`font-semibold text-[12px] truncate leading-tight ${isInvestigated ? "line-through text-slate-400" : "text-slate-900 dark:text-foreground"}`}>
+                                {claim.claimType.includes("Warehouse") ? claim.gtin : (claim.poNumber || claim.inboundId)}
+                              </p>
+                              {claim.gtin && !claim.claimType.includes("Warehouse") && (
+                                <p className="text-[10px] text-slate-400 truncate leading-tight">{claim.gtin}</p>
+                              )}
+                            </td>
+                            {/* Col 3: Qty */}
+                            <td className="w-20 px-3 py-2">
+                              <p className="font-bold text-[13px] text-slate-900 dark:text-foreground leading-tight">{claim.shortage || claim.damagedUnits || 0}</p>
+                              <p className="text-[10px] text-slate-400 leading-tight">{claim.claimType === "Lost in Warehouse" ? "net loss" : claim.claimType === "Damaged in Warehouse" ? "damaged" : "shortage"}</p>
+                            </td>
+                            {/* Col 4: Status */}
+                            <td className="w-40 px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
                                 {claim.reimbursementMatches?.length > 0 && (
-                                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                    Reimbursed · {claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
+                                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    ✓ {claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
                                   </span>
                                 )}
                                 {claim.caseStatusMatches?.length > 0 && (() => {
                                   const declined = claim.caseStatusMatches.find(c => c.status === "Declined");
                                   const cs = declined || claim.caseStatusMatches[0];
                                   return cs.status === "Declined"
-                                    ? <span className="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Declined</span>
-                                    : <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Pending</span>;
+                                    ? <span className="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">Declined</span>
+                                    : <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">Pending</span>;
                                 })()}
                               </div>
-                            </div>
-                          </div>
+                            </td>
+                            {/* Col 5: Actions */}
+                            <td className="w-24 px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center gap-1">
+                                <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
+                                <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
+                              </div>
+                            </td>
+                            {/* Col 6: Note */}
+                            <td className="w-44 px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                className="h-6 w-full px-2 text-[10px] rounded border border-slate-200 dark:border-border bg-transparent text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white dark:focus:bg-muted"
+                                placeholder="Note..."
+                                value={claimNotes[getClaimKey(claim)] || ""}
+                                onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
+                              />
+                            </td>
+                          </tr>
                         );
                       })}
-                    </div>
-                  </div>
-                ))}
-            </div>
+                    </React.Fragment>
+                  ))}
+              </tbody>
+            </table>
           )}
         </div>
 
