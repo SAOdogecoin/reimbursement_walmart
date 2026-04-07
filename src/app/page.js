@@ -334,16 +334,25 @@ export default function Dashboard() {
 
   const CATEGORIES = ["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage", "Lost in Warehouse", "Damaged in Warehouse", "Unused Label"];
 
+  const CATEGORY_COLORS = {
+    "Inbound Discrepancy": "bg-blue-500",
+    "Damaged Inbound": "bg-orange-400",
+    "MTR Shortage": "bg-rose-500",
+    "Lost in Warehouse": "bg-violet-500",
+    "Damaged in Warehouse": "bg-amber-400",
+    "Unused Label": "bg-teal-500",
+  };
+
   // Shared style tokens
-  const sectionLabel = "text-[10px] font-bold text-slate-400 uppercase tracking-widest";
-  const panel = "bg-white dark:bg-card border border-slate-100 dark:border-border rounded-xl p-5";
-  const fieldLabel = "text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5";
+  const sectionLabel = "text-[10px] font-semibold text-slate-400 uppercase tracking-widest";
+  const panel = "bg-white dark:bg-card shadow-sm border border-slate-100/80 dark:border-border rounded-2xl p-5";
+  const fieldLabel = "text-[10px] font-semibold text-slate-400 uppercase tracking-widest block mb-1.5";
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-background overflow-hidden font-sans text-sm">
+    <div className="flex h-screen bg-slate-100/40 dark:bg-background overflow-hidden font-sans text-sm">
 
       {/* ── Left Sidebar ── */}
-      <aside className="w-[390px] border-r border-slate-100 dark:border-border flex flex-col gap-4 overflow-y-auto shrink-0 bg-slate-50 dark:bg-muted/10 p-5">
+      <aside className="w-[390px] border-r border-slate-200/50 dark:border-border flex flex-col gap-4 overflow-y-auto shrink-0 bg-slate-50/70 dark:bg-muted/10 p-5">
 
         {/* Header */}
         <div className="flex justify-between items-center py-1">
@@ -353,7 +362,7 @@ export default function Dashboard() {
           </div>
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
             <DialogTrigger asChild>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-border bg-white dark:bg-card text-slate-500 hover:text-slate-900 hover:border-slate-300 transition-colors">
+              <button className="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card text-slate-400 hover:text-slate-700 hover:border-slate-300 hover:shadow-sm transition-all">
                 <SlidersHorizontal size={14} />
               </button>
             </DialogTrigger>
@@ -362,7 +371,7 @@ export default function Dashboard() {
             <DialogContent className="w-[820px] max-w-[calc(100vw-2rem)] sm:max-w-[820px] p-0 gap-0 overflow-hidden">
               <div className="flex h-[580px]">
                 {/* Settings Nav */}
-                <nav className="w-52 border-r border-slate-100 dark:border-border bg-slate-50 dark:bg-muted/20 flex flex-col p-3 gap-0.5 shrink-0">
+                <nav className="w-52 border-r border-slate-100 dark:border-border bg-slate-50/80 dark:bg-muted/20 flex flex-col p-3 gap-0.5 shrink-0">
                   <p className={`${sectionLabel} px-3 py-2.5`}>Settings</p>
                   {[
                     { id: "database", label: "Database", icon: Database },
@@ -495,7 +504,7 @@ export default function Dashboard() {
                           <button
                             onClick={handleUploadAll}
                             disabled={isLoading || !uploadQueue.some(i => i.status === "pending" || i.status === "error")}
-                            className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
                           >
                             <UploadCloud size={12} /> Upload All
                           </button>
@@ -604,10 +613,10 @@ export default function Dashboard() {
 
         {/* ── Audit Upload Card ── */}
         <div
-          className={`${panel} flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed cursor-pointer hover:border-slate-300 transition-colors`}
+          className={`${panel} flex flex-col items-center justify-center text-center gap-4 border-2 border-dashed border-slate-200 dark:border-border cursor-pointer hover:border-slate-300 hover:shadow-md transition-all`}
           onClick={() => multiFileInputRef.current?.click()}
         >
-          <div className="w-11 h-11 rounded-xl bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center shadow-sm">
             <FileSpreadsheet size={22} className="text-slate-400" />
           </div>
           <div>
@@ -615,10 +624,10 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-400 mt-0.5">InboundReceipt or Reconciliation files</p>
           </div>
           <div className="flex gap-2 w-full" onClick={e => e.stopPropagation()}>
-            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => multiFileInputRef.current?.click()}>
+            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors shadow-sm" onClick={() => multiFileInputRef.current?.click()}>
               <FolderOpen size={12} /> Select Files
             </button>
-            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); }}>
+            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-xl border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); }}>
               <FileText size={12} /> New Audit
             </button>
             <input type="file" ref={multiFileInputRef} multiple className="hidden" accept=".csv,.xlsx" onChange={e => handleAuditFiles(e.target.files)} />
@@ -654,7 +663,7 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
           <button
-            className="w-full mt-3 inline-flex items-center justify-center gap-2 h-9 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 transition-colors"
+            className="w-full mt-3 inline-flex items-center justify-center gap-2 h-9 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 disabled:opacity-40 transition-colors shadow-sm"
             onClick={handleCrosscheck}
             disabled={isLoading}
           >
@@ -670,7 +679,7 @@ export default function Dashboard() {
               <button
                 key={cat}
                 onClick={() => setFilters(prev => ({ ...prev, [cat]: !prev[cat] }))}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${filters[cat] ? "bg-slate-900 dark:bg-foreground text-white dark:text-background border-slate-900 dark:border-foreground" : "bg-white dark:bg-muted text-slate-500 border-slate-200 dark:border-border hover:border-slate-400"}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${filters[cat] ? "bg-slate-800 dark:bg-foreground text-white dark:text-background border-slate-800 dark:border-foreground shadow-sm" : "bg-white dark:bg-muted text-slate-500 border-slate-200 dark:border-border hover:border-slate-300 hover:text-slate-700 hover:shadow-sm"}`}
               >
                 {cat}
                 <span className={`text-[10px] font-bold ${filters[cat] ? "opacity-60" : "text-slate-400"}`}>{getCount(cat)}</span>
@@ -690,16 +699,16 @@ export default function Dashboard() {
       <main className="flex-1 flex flex-col relative w-full h-full bg-white dark:bg-background">
 
         {/* Header */}
-        <header className="px-8 py-4 border-b border-slate-100 dark:border-border bg-white dark:bg-background z-10 sticky top-0 flex justify-between items-center">
+        <header className="px-8 py-4 border-b border-slate-100 dark:border-border bg-white/95 dark:bg-background/95 backdrop-blur-sm z-10 sticky top-0 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-foreground tracking-tight">Eligible Claims</h2>
             <p className="text-[11px] text-slate-400 mt-0.5">{activeClaims.length} claim{activeClaims.length !== 1 ? "s" : ""}</p>
           </div>
           <div className="flex items-center gap-1.5">
-            <button className="inline-flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors" onClick={openAllPos}>
+            <button className="inline-flex items-center gap-1.5 h-8 px-3.5 text-[11px] font-semibold rounded-xl border border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm transition-all" onClick={openAllPos}>
               <ExternalLink size={12} /> Open All POs
             </button>
-            <button className="inline-flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors" onClick={openAllGtins}>
+            <button className="inline-flex items-center gap-1.5 h-8 px-3.5 text-[11px] font-semibold rounded-xl border border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm transition-all" onClick={openAllGtins}>
               <ExternalLink size={12} /> Open All GTINs
             </button>
           </div>
@@ -709,8 +718,8 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto w-full">
           {activeClaims.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-8">
-              <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center mb-4">
-                <FileText size={24} className="text-slate-300" />
+              <div className="w-16 h-16 rounded-3xl bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border flex items-center justify-center mb-5 shadow-sm">
+                <FileText size={26} className="text-slate-300" />
               </div>
               <h3 className="text-sm font-semibold text-slate-600 dark:text-foreground mb-1">No claims yet</h3>
               <p className="text-xs text-slate-400">Upload InboundReceipt or Reconciliation files from the left panel.</p>
@@ -723,10 +732,10 @@ export default function Dashboard() {
                 .map(({ type, items }) => (
                   <div key={type} className="w-full">
                     {/* Sticky category header */}
-                    <div className="sticky top-0 z-10 bg-white/95 dark:bg-background/95 backdrop-blur border-b border-slate-100 dark:border-border px-8 py-2.5 flex items-center gap-2.5">
-                      <span className="w-1 h-3.5 rounded-full bg-slate-900 dark:bg-foreground inline-block shrink-0" />
+                    <div className="sticky top-0 z-10 bg-white/95 dark:bg-background/95 backdrop-blur-sm border-b border-slate-100 dark:border-border px-8 py-3 flex items-center gap-2.5">
+                      <span className={`w-2 h-2 rounded-full ${CATEGORY_COLORS[type] || "bg-slate-800"} inline-block shrink-0`} />
                       <span className={`${sectionLabel}`}>{type}</span>
-                      <span className="text-[10px] font-bold text-slate-300 dark:text-muted-foreground">{items.length}</span>
+                      <span className="text-[10px] font-semibold text-slate-300 dark:text-muted-foreground">{items.length}</span>
                     </div>
 
                     {/* Claim rows */}
@@ -735,11 +744,11 @@ export default function Dashboard() {
                         const isExpanded = expandedClaims.has(idx);
                         const isInvestigated = investigatedClaims.has(idx);
                         return (
-                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
+                          <div key={idx} className={`w-full border-b border-slate-100/70 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
 
                             {/* Row */}
                             <div
-                              className={`px-8 py-3.5 flex items-center justify-between group cursor-pointer transition-colors ${isExpanded ? "bg-slate-50/80 dark:bg-muted/20" : "hover:bg-slate-50/60 dark:hover:bg-muted/10"}`}
+                              className={`px-8 py-3.5 flex items-center justify-between group cursor-pointer transition-all ${isExpanded ? "bg-slate-50 dark:bg-muted/20" : "hover:bg-slate-50/80 dark:hover:bg-muted/10"}`}
                               onClick={() => toggleExpand(idx)}
                             >
                               <div className="flex items-center gap-3.5 flex-1 min-w-0">
@@ -755,8 +764,8 @@ export default function Dashboard() {
                                       {claim.claimType.includes("Warehouse") ? `GTIN: ${claim.gtin}` : claim.poNumber ? `PO: ${claim.poNumber}` : `Inbound: ${claim.inboundId}`}
                                     </h4>
                                     <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all shrink-0" onClick={e => e.stopPropagation()}>
-                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
-                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
+                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</button>
+                                      <button className="h-5 px-2 text-[10px] font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
                                     </div>
                                   </div>
                                   <p className="text-[11px] text-slate-400 mt-0.5 truncate">
@@ -770,7 +779,8 @@ export default function Dashboard() {
                               {/* Badges */}
                               <div className="flex items-center gap-1.5 shrink-0 ml-4">
                                 {claim.reimbursementMatches?.length > 0 && (
-                                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-full">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                                     Reimbursed · {claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
                                   </span>
                                 )}
@@ -778,15 +788,15 @@ export default function Dashboard() {
                                   const declined = claim.caseStatusMatches.find(c => c.status === "Declined");
                                   const cs = declined || claim.caseStatusMatches[0];
                                   return cs.status === "Declined"
-                                    ? <span className="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Declined</span>
-                                    : <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-full">Case Pending</span>;
+                                    ? <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold px-2.5 py-1 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />Case Declined</span>
+                                    : <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold px-2.5 py-1 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />Case Pending</span>;
                                 })()}
                               </div>
                             </div>
 
                             {/* Expanded panel */}
                             {isExpanded && (
-                              <div className="px-16 py-6 bg-slate-50/50 dark:bg-muted/10 border-t border-slate-100 dark:border-border">
+                              <div className="px-16 py-6 bg-slate-50/60 dark:bg-muted/10 border-t border-slate-100/80 dark:border-border">
 
                                 <div className="mb-6">
                                   <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-4`}>Units & Values</p>
@@ -844,7 +854,7 @@ export default function Dashboard() {
 
                                 <div>
                                   <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Actions</p>
-                                  <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => copyClaimDetails(claim)}>
+                                  <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors shadow-sm" onClick={() => copyClaimDetails(claim)}>
                                     <ClipboardPaste size={12} /> Copy Details for Case
                                   </button>
                                 </div>
@@ -864,9 +874,9 @@ export default function Dashboard() {
 
       {/* Loading overlay */}
       {isLoading && (
-        <div className="fixed inset-0 bg-white/60 dark:bg-background/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-          <div className="animate-spin rounded-full h-9 w-9 border-2 border-slate-100 border-t-slate-900 mb-4" />
-          <p className="text-xs font-semibold text-slate-600 dark:text-foreground bg-white dark:bg-card px-5 py-2 rounded-full border border-slate-100 dark:border-border shadow-sm">Processing...</p>
+        <div className="fixed inset-0 bg-white/70 dark:bg-background/70 backdrop-blur-md z-50 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-100 border-t-slate-800 mb-4" />
+          <p className="text-xs font-semibold text-slate-700 dark:text-foreground bg-white dark:bg-card px-6 py-2.5 rounded-full border border-slate-100 dark:border-border shadow-md">Processing...</p>
         </div>
       )}
     </div>
