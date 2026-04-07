@@ -30,7 +30,13 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [uploadMerchantName, setUploadMerchantName] = useState("");
+  const [uploadMerchant, setUploadMerchant] = useState("");
+  const [newMerchantName, setNewMerchantName] = useState("");
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [partnerIdMap, setPartnerIdMap] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("partnerIdMap") || "{}"); } catch { return {}; }
+  });
   
   // Claim UI State
   const [expandedClaims, setExpandedClaims] = useState(new Set());
@@ -155,25 +161,100 @@ export default function Dashboard() {
     }
   };
 
-  const handleSettlementUpload = async (e) => {
+  const handleSettlementFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+
+    // Auto-detect merchant from Partner ID in CSV
+    if (file.name.endsWith(".csv")) {
+      try {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/);
+        const headers = lines[0].split(",").map(h => h.toLowerCase().replace(/"/g, "").trim());
+        const pidCol = headers.findIndex(h => h === "partner id");
+        if (pidCol > -1) {
+          for (let i = 1; i < Math.min(lines.length, 5); i++) {
+            const cols = lines[i].split(",");
+            const pid = (cols[pidCol] || "").replace(/"/g, "").trim();
+            if (pid && partnerIdMap[pid]) {
+              setUploadMerchant(partnerIdMap[pid]);
+              toast.success(`Auto-detected: ${partnerIdMap[pid]}`);
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+  };
+
+  const handleSettlementUpload = async () => {
+    if (!pendingFile) return toast.error("Choose a file first.");
+    const merchant = uploadMerchant === "__new__" ? newMerchantName.trim() : uploadMerchant;
+    if (!merchant) return toast.error("Select or enter a merchant name.");
     setIsLoading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("merchantName", uploadMerchantName.trim() || "Master Settlement Data");
+      formData.append("file", pendingFile);
+      formData.append("merchantName", merchant);
       const result = await processSettlementFile(formData);
       if (result.error) toast.error(result.error);
       else {
-          toast.success(result.message);
-          getMerchants().then(setMerchants);
+        toast.success(`Added ${result.added} | Skipped ${result.skipped} duplicates`);
+        getMerchants().then(setMerchants);
+        setPendingFile(null);
       }
     } catch (err) {
       toast.error("Upload failed.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const savePartnerIdMap = (map) => {
+    setPartnerIdMap(map);
+    localStorage.setItem("partnerIdMap", JSON.stringify(map));
+  };
+
+  const openAllGtins = () => {
+    const gtins = [...new Set(activeClaims.map(c => c.gtin).filter(Boolean))];
+    if (!gtins.length) return toast.error("No GTINs in filtered claims.");
+    if (gtins.length > 10) toast(`Opening first 10 of ${gtins.length} GTINs`);
+    gtins.slice(0, 10).forEach(g => window.open(`https://www.walmart.com/search?q=${g}`, "_blank"));
+  };
+
+  const openAllPos = () => {
+    const pos = [...new Set(activeClaims.map(c => c.poNumber).filter(Boolean))];
+    if (!pos.length) return toast.error("No PO numbers in filtered claims.");
+    navigator.clipboard.writeText(pos.join("\n"));
+    toast.success(`${pos.length} PO numbers copied to clipboard`);
+  };
+
+  const copyClaim = (claim) => {
+    const parts = [
+      claim.claimType,
+      claim.poNumber ? `PO: ${claim.poNumber}` : null,
+      claim.gtin ? `GTIN: ${claim.gtin}` : null,
+      claim.inboundId ? `Inbound: ${claim.inboundId}` : null,
+    ].filter(Boolean);
+    navigator.clipboard.writeText(parts.join(" | "));
+    toast.success("Copied");
+  };
+
+  const copyClaimDetails = (claim) => {
+    const lines = [
+      `Claim Type: ${claim.claimType}`,
+      claim.poNumber && `PO Number: ${claim.poNumber}`,
+      claim.gtin && `GTIN: ${claim.gtin}`,
+      claim.sku && `SKU: ${claim.sku}`,
+      claim.inboundId && `Inbound ID: ${claim.inboundId}`,
+      `Shortage / Units: ${claim.shortage || claim.damagedUnits || 0}`,
+      claim.expectedUnits != null && `Expected: ${claim.expectedUnits}`,
+      claim.receivedUnits != null && `Received: ${claim.receivedUnits}`,
+      claim.reimbursementMatches?.length > 0 && `Reimbursed Qty: ${claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}`,
+    ].filter(Boolean).join("\n");
+    navigator.clipboard.writeText(lines);
+    toast.success("Claim details copied to clipboard");
   };
 
   const activeClaims = generatedClaims.filter(c => {
@@ -204,20 +285,53 @@ export default function Dashboard() {
                 <DialogContent>
                     <DialogHeader><DialogTitle>Settings</DialogTitle></DialogHeader>
                     <div className="space-y-5 mt-4">
-                        <div className="flex flex-col gap-2 pb-4 border-b">
-                            <span className="font-medium text-sm">Update Settlement Data</span>
-                            <Input
-                                placeholder="Merchant name (e.g. Soylent Nutrition, Inc.)"
-                                value={uploadMerchantName}
-                                onChange={(e) => setUploadMerchantName(e.target.value)}
-                                className="text-sm"
-                            />
-                            <div className="flex justify-end">
-                                <Button variant="outline" size="sm" onClick={() => settlementFileInputRef.current?.click()} className="rounded-xl" disabled={!uploadMerchantName.trim()}>
-                                    <Table2 className="mr-2 h-4 w-4"/>Upload to DB
-                                </Button>
-                                <input type="file" ref={settlementFileInputRef} className="hidden" accept=".csv,.xlsx" onChange={handleSettlementUpload} />
+                        <div className="flex flex-col gap-3 pb-4 border-b">
+                            <span className="font-semibold text-sm">Update Settlement Master Sheet</span>
+                            <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => settlementFileInputRef.current?.click()}>
+                                <Table2 className="mr-2 h-4 w-4"/>{pendingFile ? pendingFile.name : "Choose Settlement File"}
+                            </Button>
+                            <input type="file" ref={settlementFileInputRef} className="hidden" accept=".csv,.xlsx" onChange={handleSettlementFileSelect} />
+                            <div>
+                                <Label className="text-xs text-muted-foreground mb-1 block">Target Merchant</Label>
+                                <Select value={uploadMerchant} onValueChange={setUploadMerchant}>
+                                    <SelectTrigger className="text-sm"><SelectValue placeholder="Select a merchant..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {merchants.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                                        <SelectItem value="__new__">+ New Merchant...</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
+                            {uploadMerchant === "__new__" && (
+                                <Input placeholder="Enter merchant name" value={newMerchantName} onChange={e => setNewMerchantName(e.target.value)} className="text-sm" />
+                            )}
+                            <div>
+                                <Label className="text-xs text-muted-foreground mb-2 block">Partner ID Mapping (for auto-detection)</Label>
+                                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                                    {Object.entries(partnerIdMap).map(([pid, name]) => (
+                                        <div key={pid} className="flex items-center gap-2 text-xs">
+                                            <span className="truncate flex-1 text-muted-foreground">{name}</span>
+                                            <span className="font-mono shrink-0">{pid}</span>
+                                            <button className="text-destructive hover:text-red-400 shrink-0" onClick={() => { const m = {...partnerIdMap}; delete m[pid]; savePartnerIdMap(m); }}>×</button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-1.5 mt-2">
+                                    <Input id="new-pid-name" placeholder="Merchant name" className="text-xs h-7" />
+                                    <Input id="new-pid-id" placeholder="Partner ID" className="text-xs h-7 w-32" />
+                                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs shrink-0" onClick={() => {
+                                        const name = document.getElementById("new-pid-name").value.trim();
+                                        const pid = document.getElementById("new-pid-id").value.trim();
+                                        if (name && pid) { savePartnerIdMap({...partnerIdMap, [pid]: name}); document.getElementById("new-pid-name").value = ""; document.getElementById("new-pid-id").value = ""; }
+                                    }}>Add</Button>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Checkbox checked={skipDuplicates} onCheckedChange={setSkipDuplicates} id="skip-dup" />
+                                <Label htmlFor="skip-dup" className="text-xs cursor-pointer">Skip duplicate check (faster)</Label>
+                            </div>
+                            <Button size="sm" className="w-full" onClick={handleSettlementUpload} disabled={isLoading || !pendingFile}>
+                                <UploadCloud className="mr-2 h-4 w-4"/>Upload & Append
+                            </Button>
                         </div>
                         <div className="flex justify-between items-center border-b pb-4">
                             <Label>Hide Fully Reimbursed Claims</Label>
@@ -325,8 +439,8 @@ export default function Dashboard() {
         <header className="px-8 py-6 border-b bg-background z-10 sticky top-0 flex justify-between items-center w-full min-h-[85px]">
             <h2 className="text-2xl font-bold tracking-tight">Eligible Claims</h2>
             <div className="space-x-3">
-                <Button variant="outline" size="sm" className="font-medium h-9"><ExternalLink className="mr-2 h-4 w-4"/>Open All Filtered POs</Button>
-                <Button variant="outline" size="sm" className="font-medium h-9"><ExternalLink className="mr-2 h-4 w-4"/>Open All Filtered GTINs</Button>
+                <Button variant="outline" size="sm" className="font-medium h-9" onClick={openAllPos}><ExternalLink className="mr-2 h-4 w-4"/>Open All Filtered POs</Button>
+                <Button variant="outline" size="sm" className="font-medium h-9" onClick={openAllGtins}><ExternalLink className="mr-2 h-4 w-4"/>Open All Filtered GTINs</Button>
             </div>
         </header>
         
@@ -363,9 +477,8 @@ export default function Dashboard() {
                                                 
                                                 {/* Hidden buttons that show on hover just like the screenshot */}
                                                 <div className="invisible group-hover:visible flex items-center gap-2 ml-2 transition-all opacity-0 group-hover:opacity-100 h-7" onClick={e => e.stopPropagation()}>
-                                                    <Button variant="outline" className="h-full px-3 text-xs w-fit rounded-full bg-background font-medium hover:bg-muted">Open</Button>
-                                                    <Button variant="outline" className="h-full px-3 text-xs w-fit rounded-full bg-background font-medium hover:bg-muted">Copy</Button>
-                                                    <Input disabled className="h-full w-28 text-xs rounded-md bg-background" placeholder="Disabled" />
+                                                    <Button variant="outline" className="h-full px-3 text-xs w-fit rounded-full bg-background font-medium hover:bg-muted" onClick={() => { const q = claim.gtin || claim.poNumber || claim.inboundId; if (q) window.open(`https://www.walmart.com/search?q=${q}`, "_blank"); }}>Open</Button>
+                                                    <Button variant="outline" className="h-full px-3 text-xs w-fit rounded-full bg-background font-medium hover:bg-muted" onClick={() => copyClaim(claim)}>Copy</Button>
                                                 </div>
                                             </div>
                                             <p className="text-[13px] text-muted-foreground mt-0.5 truncate">
@@ -443,7 +556,7 @@ export default function Dashboard() {
 
                                         <div>
                                             <h5 className="text-[12px] font-bold uppercase tracking-wider text-muted-foreground border-b pb-2 mb-4">Actions</h5>
-                                            <Button variant="outline" className="h-9"><ClipboardPaste className="mr-2 h-4 w-4"/>Copy Details for Case</Button>
+                                            <Button variant="outline" className="h-9" onClick={() => copyClaimDetails(claim)}><ClipboardPaste className="mr-2 h-4 w-4"/>Copy Details for Case</Button>
                                         </div>
 
                                     </div>
