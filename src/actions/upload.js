@@ -119,3 +119,18 @@ export async function fetchClaims(merchantName) {
        take: 50
    });
 }
+
+export async function fetchCrosscheckData(merchantName) {
+   // Fetch all claims for that merchant so the client can perform crosschecks natively
+   return await prisma.settlementClaim.findMany({
+       where: { merchantName }
+   });
+}
+
+export async function getMerchants() {
+    const records = await prisma.settlementClaim.findMany({
+        distinct: ['merchantName'],
+        select: { merchantName: true }
+    });
+    return records.map(c => c.merchantName);
+}
