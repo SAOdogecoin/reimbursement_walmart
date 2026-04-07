@@ -12,7 +12,7 @@ import {
   FileSpreadsheet, FolderOpen, FileText, SlidersHorizontal, RefreshCcw,
   Download, UploadCloud, Moon, Sun, Table2, ChevronRight, ChevronDown,
   ClipboardPaste, ExternalLink, Database, SlidersVertical, NotebookPen,
-  Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus
+  Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
@@ -121,6 +121,7 @@ export default function Dashboard() {
     const defaults = { hideReimbursed: true, markInvestigated: true, showDate: false };
     try { const s = localStorage.getItem("toggles"); return s ? { ...defaults, ...JSON.parse(s) } : defaults; } catch { return defaults; }
   });
+  const [sessionHideReimbursed, setSessionHideReimbursed] = useState(null); // null = follow settings
 
   useEffect(() => {
     getMerchants().then(setMerchants).catch(console.error);
@@ -328,7 +329,8 @@ export default function Dashboard() {
     if (!filters[c.claimType]) return false;
     const term = searchQuery.toLowerCase();
     if (term && !((c.gtin || "").toLowerCase().includes(term) || (c.poNumber || "").toLowerCase().includes(term) || (c.inboundId || "").toLowerCase().includes(term))) return false;
-    if (toggles.hideReimbursed && c.reimbursementMatches?.length > 0) {
+    const effectiveHideReimbursed = sessionHideReimbursed !== null ? sessionHideReimbursed : toggles.hideReimbursed;
+    if (effectiveHideReimbursed && c.reimbursementMatches?.length > 0) {
       const totalReimbursed = c.reimbursementMatches.reduce((acc, m) => acc + (m.quantity || 1), 0);
       if (totalReimbursed >= (c.shortage || c.damagedUnits || 0)) return false;
     }
@@ -481,8 +483,8 @@ export default function Dashboard() {
 
                                 {/* Remove */}
                                 {item.status !== "uploading" && (
-                                  <button onClick={() => removeFromQueue(item.id)} className="shrink-0 text-slate-200 hover:text-slate-500 transition-colors ml-0.5">
-                                    <X size={11} />
+                                  <button onClick={() => removeFromQueue(item.id)} className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ml-0.5">
+                                    <X size={13} />
                                   </button>
                                 )}
                               </div>
@@ -703,6 +705,18 @@ export default function Dashboard() {
             <p className="text-[11px] text-slate-400 mt-0.5">{activeClaims.length} claim{activeClaims.length !== 1 ? "s" : ""}</p>
           </div>
           <div className="flex items-center gap-1.5">
+            {(() => {
+              const hiding = sessionHideReimbursed !== null ? sessionHideReimbursed : toggles.hideReimbursed;
+              return (
+                <button
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold rounded-lg border transition-colors ${hiding ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50"}`}
+                  onClick={() => setSessionHideReimbursed(!hiding)}
+                >
+                  {hiding ? <EyeOff size={12} /> : <Eye size={12} />}
+                  {hiding ? "Reimbursed Hidden" : "Hide Reimbursed"}
+                </button>
+              );
+            })()}
             <button className="inline-flex items-center gap-1.5 h-8 px-3 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors" onClick={openAllPos}>
               <ExternalLink size={12} /> Open All POs
             </button>
