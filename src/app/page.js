@@ -178,7 +178,7 @@ export default function Dashboard() {
     setIsLoading(true);
 
     try {
-      const merchantArg = selectedMerchant === "__all__" ? "" : selectedMerchant;
+      const merchantArg = selectedMerchant === "all" ? "" : selectedMerchant;
       const historicalSettlements = await fetchCrosscheckData(merchantArg);
 
       const allGtins = [...new Set(generatedClaims.map(c => (c.gtin || "").replace(/^0+/, "")).filter(Boolean))];
@@ -306,8 +306,8 @@ export default function Dashboard() {
   };
 
   const copyClaim = (claim) => {
-    const parts = [claim.claimType, claim.poNumber && `PO: ${claim.poNumber}`, claim.gtin && `GTIN: ${claim.gtin}`, claim.inboundId && `Inbound: ${claim.inboundId}`].filter(Boolean);
-    navigator.clipboard.writeText(parts.join(" | "));
+    const value = claim.claimType.includes("Warehouse") ? claim.gtin : (claim.poNumber || claim.gtin || claim.inboundId);
+    if (value) navigator.clipboard.writeText(value);
     toast.success("Copied");
   };
 
@@ -657,7 +657,7 @@ export default function Dashboard() {
               <SelectValue placeholder="Select database target..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">— All Clients —</SelectItem>
+              <SelectItem value="all">All Clients</SelectItem>
               {merchants.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -743,7 +743,7 @@ export default function Dashboard() {
                         const isExpanded = expandedClaims.has(idx);
                         const isInvestigated = investigatedClaims.has(idx);
                         return (
-                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity ${isInvestigated ? "opacity-40" : ""}`}>
+                          <div key={idx} className={`w-full border-b border-slate-50 dark:border-border last:border-b-0 transition-opacity group/row ${isInvestigated ? "opacity-40" : ""}`}>
 
                             {/* Row */}
                             <div
@@ -791,6 +791,19 @@ export default function Dashboard() {
                                 })()}
                               </div>
                             </div>
+
+                            {/* Inline hover note */}
+                            {notesEnabled.has(claim.claimType) && !isExpanded && (
+                              <div className="px-16 pb-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                <textarea
+                                  className="w-full text-xs border border-slate-200 dark:border-border rounded-lg px-3 py-2 bg-slate-50 dark:bg-muted resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 placeholder:text-slate-300"
+                                  rows={1}
+                                  placeholder="Add a note..."
+                                  value={claimNotes[getClaimKey(claim)] || ""}
+                                  onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
+                                />
+                              </div>
+                            )}
 
                             {/* Expanded panel */}
                             {isExpanded && (
