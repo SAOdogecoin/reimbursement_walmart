@@ -338,6 +338,10 @@ export default function Dashboard() {
   });
 
   const selectedClaim = selectedClaimKey ? generatedClaims.find(c => getClaimKey(c) === selectedClaimKey) ?? null : null;
+  const [noteEdit, setNoteEdit] = useState("");
+  useEffect(() => {
+    setNoteEdit(selectedClaim ? claimNotes[getClaimKey(selectedClaim)] || "" : "");
+  }, [selectedClaimKey]);
 
   const getCount = (type) => generatedClaims.filter(c => c.claimType === type).length;
 
@@ -730,15 +734,15 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400">Upload InboundReceipt or Reconciliation files from the left panel.</p>
             </div>
           ) : (
-            <table className="w-full border-collapse">
+            <table className="border-collapse" style={{tableLayout:"fixed",width:"max-content",minWidth:"100%"}}>
               <thead className="sticky top-0 z-10 bg-white dark:bg-background border-b border-slate-100 dark:border-border">
                 <tr>
                   <th className="w-9 px-3 py-2" />
-                  <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identifier</th>
+                  <th className="w-52 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identifier</th>
                   <th className="w-20 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Qty</th>
-                  <th className="w-40 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="w-36 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
                   <th className="w-24 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Actions</th>
-                  <th className="w-44 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Note</th>
+                  <th className="w-36 px-3 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -785,11 +789,11 @@ export default function Dashboard() {
                               <p className="text-[10px] text-slate-400 leading-tight">{claim.claimType === "Lost in Warehouse" ? "net loss" : claim.claimType === "Damaged in Warehouse" ? "damaged" : "shortage"}</p>
                             </td>
                             {/* Col 4: Status */}
-                            <td className="w-40 px-3 py-2">
+                            <td className="w-36 px-3 py-2">
                               <div className="flex flex-wrap gap-1">
                                 {claim.reimbursementMatches?.length > 0 && (
-                                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                    ✓ {claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
+                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                    ✓ Reimbursed · {claim.reimbursementMatches.reduce((a, m) => a + (m.quantity || 1), 0)}
                                   </span>
                                 )}
                                 {claim.caseStatusMatches?.length > 0 && (() => {
@@ -808,15 +812,14 @@ export default function Dashboard() {
                                 <button className="h-5 px-1.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" onClick={() => copyClaim(claim)}>Copy</button>
                               </div>
                             </td>
-                            {/* Col 6: Note */}
-                            <td className="w-44 px-3 py-2" onClick={e => e.stopPropagation()}>
-                              <input
-                                type="text"
-                                className="h-6 w-full px-2 text-[10px] rounded border border-slate-200 dark:border-border bg-transparent text-slate-600 dark:text-foreground placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white dark:focus:bg-muted"
-                                placeholder="Note..."
-                                value={claimNotes[getClaimKey(claim)] || ""}
-                                onChange={e => updateClaimNote(getClaimKey(claim), e.target.value)}
-                              />
+                            {/* Col 6: Note pill */}
+                            <td className="w-36 px-3 py-2">
+                              {claimNotes[getClaimKey(claim)] && (
+                                <span className="inline-flex items-center gap-1 h-5 px-1.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-600 border border-blue-100 max-w-full truncate">
+                                  <NotebookPen size={9} className="shrink-0" />
+                                  <span className="truncate">{claimNotes[getClaimKey(claim)]}</span>
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -914,9 +917,23 @@ export default function Dashboard() {
                   className="w-full text-xs border border-slate-200 dark:border-border rounded-lg p-3 bg-slate-50 dark:bg-muted resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 placeholder:text-slate-300"
                   rows={3}
                   placeholder="Add a note for this claim..."
-                  value={claimNotes[getClaimKey(selectedClaim)] || ""}
-                  onChange={e => updateClaimNote(getClaimKey(selectedClaim), e.target.value)}
+                  value={noteEdit}
+                  onChange={e => setNoteEdit(e.target.value)}
                 />
+                <div className="flex items-center justify-between mt-2">
+                  {claimNotes[getClaimKey(selectedClaim)] !== noteEdit && (
+                    <button
+                      className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+                      onClick={() => setNoteEdit(claimNotes[getClaimKey(selectedClaim)] || "")}
+                    >Discard</button>
+                  )}
+                  <div className="flex-1" />
+                  <button
+                    className="inline-flex items-center h-7 px-3 text-[11px] font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors disabled:opacity-40"
+                    disabled={noteEdit === (claimNotes[getClaimKey(selectedClaim)] || "")}
+                    onClick={() => updateClaimNote(getClaimKey(selectedClaim), noteEdit)}
+                  >Save</button>
+                </div>
               </div>
 
               {/* Actions */}
