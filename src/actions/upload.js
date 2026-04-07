@@ -150,3 +150,31 @@ export async function getMerchants() {
     });
     return records.map(c => c.merchantName);
 }
+
+export async function fetchCaseStatuses(gtins) {
+    // gtins: array of normalized GTINs (leading zeros stripped)
+    if (!gtins || gtins.length === 0) return [];
+    return await prisma.caseStatus.findMany({
+        where: { gtin: { in: gtins } },
+        select: { gtin: true, caseId: true, status: true }
+    });
+}
+
+export async function importCaseStatuses(rows) {
+    // rows: [{ gtin, caseId, status }]
+    if (!rows.length) return { added: 0, skipped: 0 };
+    let added = 0, skipped = 0;
+    for (const row of rows) {
+        try {
+            await prisma.caseStatus.upsert({
+                where: { caseId: row.caseId },
+                update: { gtin: row.gtin, status: row.status },
+                create: row,
+            });
+            added++;
+        } catch {
+            skipped++;
+        }
+    }
+    return { added, skipped };
+}

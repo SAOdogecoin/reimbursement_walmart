@@ -21,3 +21,11 @@ model SettlementClaim {
 
   @@unique([wfsReferenceId, transactionDateTime, netPayable, merchantName])
 }
+
+model CaseStatus {
+  id        String   @id @default(uuid())
+  gtin      String
+  caseId    String   @unique
+  status    String   // "Declined" | "Pending"
+  createdAt DateTime @default(now())
+}

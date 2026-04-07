@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileSpreadsheet, FolderOpen, FileText, SlidersHorizontal, RefreshCcw, Download, UploadCloud, Moon, Sun, Table2, Info, ChevronRight, ChevronDown, ClipboardPaste, ExternalLink } from "lucide-react";
 import { useTheme } from "next-themes";
-import { processSettlementFile, getMerchants, fetchCrosscheckData } from "@/actions/upload";
+import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
 import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaims } from "@/lib/parser";
 
 export default function Dashboard() {
@@ -129,16 +129,25 @@ export default function Dashboard() {
 
     try {
       const historicalSettlements = await fetchCrosscheckData(selectedMerchant);
-      
+
+      // Collect all unique normalized GTINs from claims to fetch case statuses
+      const allGtins = [...new Set(generatedClaims.map(c => (c.gtin || '').replace(/^0+/, '')).filter(Boolean))];
+      const caseStatusList = await fetchCaseStatuses(allGtins);
+      const caseStatusByGtin = new Map();
+      caseStatusList.forEach(cs => {
+        if (!caseStatusByGtin.has(cs.gtin)) caseStatusByGtin.set(cs.gtin, []);
+        caseStatusByGtin.get(cs.gtin).push(cs);
+      });
+
       const newClaims = generatedClaims.map(claim => {
          const normGtin = (claim.gtin || '').replace(/^0+/, '');
          const po = claim.poNumber;
-         
+
          const matches = historicalSettlements.filter(s => {
              const sGtin = (s.partnerGtin || '').replace(/^0+/, '');
              const sPo = s.walmartPoNumber;
              const isRefund = s.transactionType === "Refund";
-             
+
              if (claim.claimType === "Inbound Discrepancy" || claim.claimType === "Damaged Inbound" || claim.claimType === "MTR Shortage") {
                  return sPo === po && sGtin === normGtin && isRefund && s.reasonCode.toLowerCase().includes("inbound");
              }
@@ -147,10 +156,12 @@ export default function Dashboard() {
              if (claim.claimType === "Unused Label") return sPo === po && s.transactionType === "InboundTransportationFee";
              return false;
          });
-         
-         return { ...claim, reimbursementMatches: matches };
+
+         const caseStatusMatches = caseStatusByGtin.get(normGtin) || [];
+
+         return { ...claim, reimbursementMatches: matches, caseStatusMatches };
       });
-      
+
       setGeneratedClaims(newClaims);
       toast.success(`Crosscheck complete for ${selectedMerchant}`);
     } catch (err) {
@@ -488,12 +499,21 @@ export default function Dashboard() {
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-center">
+                                    <div className="flex items-center gap-2">
                                        {claim.reimbursementMatches?.length > 0 && (
                                             <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-[11px] rounded-full px-3">
                                                 Reimbursed ({claim.reimbursementMatches.reduce((acc, m) => acc + (m.quantity || 1), 0)} Qty)
                                             </Badge>
                                         )}
+                                        {claim.caseStatusMatches?.length > 0 && (() => {
+                                            const declined = claim.caseStatusMatches.find(c => c.status === 'Declined');
+                                            const cs = declined || claim.caseStatusMatches[0];
+                                            return (
+                                                <Badge className={`text-white font-semibold text-[11px] rounded-full px-3 ${cs.status === 'Declined' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-yellow-500 hover:bg-yellow-600'}`}>
+                                                    Case {cs.status}
+                                                </Badge>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 
