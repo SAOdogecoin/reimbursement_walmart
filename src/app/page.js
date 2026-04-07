@@ -15,6 +15,7 @@ import {
   Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff, Package
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import * as xlsx from "xlsx";
 import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses } from "@/actions/upload";
 import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaims } from "@/lib/parser";
 
@@ -385,6 +386,36 @@ export default function Dashboard() {
   useEffect(() => {
     setNoteEdit(selectedClaim ? claimNotes[getClaimKey(selectedClaim)] || "" : "");
   }, [selectedClaimKey]);
+
+  const generateDisputeXlsx = (claim) => {
+    const headers = ["Inbound Order ID", "PO Number", "GTIN", "SKU", "Expected Units", "Received Units", "PO Delivered Date"];
+    const formatDate = (d) => {
+      if (!d) return "";
+      if (typeof d === "number") return new Date((d - 25569) * 86400 * 1000).toLocaleDateString("en-US");
+      return String(d);
+    };
+    const dataRow = [
+      claim.inboundId || "",
+      claim.poNumber || "",
+      claim.gtin || "",
+      claim.sku || "",
+      claim.expectedUnits != null ? claim.expectedUnits : "",
+      claim.receivedUnits != null ? claim.receivedUnits : "",
+      formatDate(claim.poDeliveredDate),
+    ];
+    const ws = xlsx.utils.aoa_to_sheet([headers, dataRow]);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Packing List");
+    const buf = xlsx.write(wb, { bookType: "xlsx", type: "buffer" });
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Dispute_${claim.inboundId || claim.poNumber || "claim"}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Dispute template downloaded");
+  };
 
   const getCount = (type) => generatedClaims.filter(c => c.claimType === type).length;
 
@@ -1029,9 +1060,16 @@ export default function Dashboard() {
               {/* Actions */}
               <div>
                 <p className={`${sectionLabel} border-b border-slate-100 dark:border-border pb-2 mb-3`}>Actions</p>
-                <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => copyClaimDetails(selectedClaim)}>
-                  <ClipboardPaste size={12} /> Copy Details for Case
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => copyClaimDetails(selectedClaim)}>
+                    <ClipboardPaste size={12} /> Copy Details for Case
+                  </button>
+                  {["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage"].includes(selectedClaim.claimType) && (
+                    <button className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 dark:text-foreground hover:bg-slate-50 dark:hover:bg-muted transition-colors" onClick={() => generateDisputeXlsx(selectedClaim)}>
+                      <FileSpreadsheet size={12} /> Dispute Template
+                    </button>
+                  )}
+                </div>
               </div>
 
             </div>
