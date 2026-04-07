@@ -34,8 +34,7 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("database");
   const [skipDuplicates, setSkipDuplicates] = useState(true);
-  const [useFilenameAsClient, setUseFilenameAsClient] = useState(false);
-  const [uploadQueue, setUploadQueue] = useState([]); // [{id, file, clientName, status, result}]
+  const [uploadQueue, setUploadQueue] = useState([]); // [{id, file, clientName, clientMode, status, result}]
   const [partnerIdMap, setPartnerIdMap] = useState(() => {
     try { return JSON.parse(localStorage.getItem("partnerIdMap") || "{}"); } catch { return {}; }
   });
@@ -175,7 +174,12 @@ export default function Dashboard() {
       const historicalSettlements = await fetchCrosscheckData(merchantArg);
 
       const allGtins = [...new Set(generatedClaims.map(c => (c.gtin || "").replace(/^0+/, "")).filter(Boolean))];
-      const caseStatusList = await fetchCaseStatuses(allGtins);
+      let caseStatusList = [];
+      try {
+        caseStatusList = await fetchCaseStatuses(allGtins);
+      } catch (e) {
+        console.warn("CaseStatus unavailable:", e?.message);
+      }
       const caseStatusByGtin = new Map();
       caseStatusList.forEach(cs => {
         if (!caseStatusByGtin.has(cs.gtin)) caseStatusByGtin.set(cs.gtin, []);
@@ -215,22 +219,25 @@ export default function Dashboard() {
   // --- Upload Queue ---
   const detectClientName = (file) => {
     const base = file.name.replace(/\.(csv|xlsx)$/i, "");
-    if (useFilenameAsClient) return base;
-    const match = base.match(/Master Data - (.+)$/);
-    if (match) return match[1].trim();
-    return base;
+    const match = base.match(/Master Data - (.+)$/i);
+    return match ? match[1].trim() : base;
   };
 
   const handleSettlementFilesSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
-    const newItems = files.map(file => ({
-      id: `${file.name}-${Date.now()}-${Math.random()}`,
-      file,
-      clientName: detectClientName(file),
-      status: "pending",
-      result: null,
-    }));
+    const newItems = files.map(file => {
+      const detected = detectClientName(file);
+      const isKnown = merchants.includes(detected);
+      return {
+        id: `${file.name}-${Date.now()}-${Math.random()}`,
+        file,
+        clientName: detected,
+        clientMode: isKnown ? "existing" : "new",
+        status: "pending",
+        result: null,
+      };
+    });
     setUploadQueue(prev => [...prev, ...newItems]);
     e.target.value = "";
   };
@@ -384,15 +391,6 @@ export default function Dashboard() {
                         <h2 className="font-semibold text-base text-slate-900 dark:text-foreground mb-0.5">Upload Settlement Files</h2>
                         <p className="text-xs text-slate-400 mb-5">Select one or more CSVs. Client names are auto-detected from filenames.</p>
 
-                        {/* Filename mode toggle */}
-                        <div className="flex items-center justify-between bg-slate-50 dark:bg-muted border border-slate-100 dark:border-border rounded-lg px-3.5 py-3 mb-4">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-700 dark:text-foreground">Use filename as client name</p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">For tab-exported CSVs where the filename is the client name</p>
-                          </div>
-                          <Switch checked={useFilenameAsClient} onCheckedChange={setUseFilenameAsClient} className="shrink-0 ml-3" />
-                        </div>
-
                         {/* Add files button */}
                         <button
                           onClick={() => settlementFileInputRef.current?.click()}
@@ -415,16 +413,38 @@ export default function Dashboard() {
                                   {item.status === "pending"   && <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />}
                                 </div>
 
-                                {/* Filename + editable client name */}
+                                {/* Filename + client name select/input */}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] text-slate-400 truncate leading-none mb-0.5">{item.file.name}</p>
-                                  <input
-                                    className="text-xs font-semibold text-slate-800 dark:text-foreground bg-transparent border-none outline-none w-full truncate placeholder:text-slate-300"
-                                    value={item.clientName}
-                                    onChange={e => updateQueueItemClient(item.id, e.target.value)}
-                                    placeholder="Client name..."
-                                    disabled={item.status === "uploading" || item.status === "done"}
-                                  />
+                                  <p className="text-[11px] text-slate-400 truncate leading-none mb-1">{item.file.name}</p>
+                                  {item.status === "uploading" || item.status === "done" ? (
+                                    <p className="text-xs font-semibold text-slate-800 dark:text-foreground truncate">{item.clientName}</p>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <select
+                                        className="text-[11px] font-medium text-slate-600 bg-slate-50 dark:bg-muted border border-slate-200 dark:border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-300 shrink-0 max-w-[110px]"
+                                        value={item.clientMode === "existing" && merchants.includes(item.clientName) ? item.clientName : "__new__"}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          if (val === "__new__") {
+                                            setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, clientMode: "new", clientName: "" } : i));
+                                          } else {
+                                            setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, clientMode: "existing", clientName: val } : i));
+                                          }
+                                        }}
+                                      >
+                                        {merchants.map(m => <option key={m} value={m}>{m}</option>)}
+                                        <option value="__new__">+ New client…</option>
+                                      </select>
+                                      {(item.clientMode === "new" || !merchants.includes(item.clientName)) && (
+                                        <input
+                                          className="text-[11px] font-semibold text-slate-800 dark:text-foreground bg-slate-50 dark:bg-muted border border-slate-200 dark:border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-300 min-w-0 flex-1"
+                                          value={item.clientName}
+                                          onChange={e => updateQueueItemClient(item.id, e.target.value)}
+                                          placeholder="New client name…"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Rows added */}
