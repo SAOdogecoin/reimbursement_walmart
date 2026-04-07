@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SettlementClaim {
+  id                  String   @id @default(uuid())
+  merchantName        String
+  transactionType     String
+  reasonCode          String?
+  wfsReferenceId      String
+  netPayable          Float
+  transactionDateTime DateTime
+  createdAt           DateTime @default(now())
+
+  @@unique([wfsReferenceId, transactionDateTime, netPayable, merchantName])
+}
