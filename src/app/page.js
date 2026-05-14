@@ -15,7 +15,6 @@ import {
   Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff, Package
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import * as xlsx from "xlsx";
 import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses, importCaseStatuses } from "@/actions/upload";
 import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaims } from "@/lib/parser";
 
@@ -55,9 +54,13 @@ export default function Dashboard() {
     } catch {}
     return new Set(["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage", "Lost in Warehouse", "Damaged in Warehouse", "Unused Label"]);
   });
-  const [claimNotes, setClaimNotes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("claimNotes") || "{}"); } catch { return {}; }
-  });
+  const [claimNotes, setClaimNotes] = useState({});
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("claimNotes");
+      if (saved) setClaimNotes(JSON.parse(saved));
+    } catch {}
+  }, []);
 
   const toggleInvestigated = (idx, e) => {
     e?.stopPropagation();
@@ -434,13 +437,14 @@ export default function Dashboard() {
     setNoteEdit(selectedClaim ? claimNotes[getNoteKey(selectedClaim)] || "" : "");
   }, [selectedClaimKey]);
 
-  const generateDisputeXlsx = (claim) => {
-    const headers = ["Inbound Order ID", "PO Number", "GTIN", "SKU", "Expected Units", "Received Units", "PO Delivered Date"];
+  const generateDisputeXlsx = async (claim) => {
+    const xlsx = await import("xlsx");
     const formatDate = (d) => {
       if (!d) return "";
       if (typeof d === "number") return new Date((d - 25569) * 86400 * 1000).toLocaleDateString("en-US");
       return String(d);
     };
+    const headers = ["Inbound Order ID", "PO Number", "GTIN", "SKU", "Expected Units", "Received Units", "PO Delivered Date"];
     const dataRow = [
       claim.inboundId || "",
       claim.poNumber || "",
