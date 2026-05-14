@@ -21,10 +21,20 @@ import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaim
 export default function Dashboard() {
   const { theme, setTheme } = useTheme();
 
-  // Audit State
+  // Audit State — persisted to localStorage so notes survive page refresh
   const [inboundFiles, setInboundFiles] = useState([]);
   const [reconFiles, setReconFiles] = useState([]);
   const [generatedClaims, setGeneratedClaims] = useState([]);
+  useEffect(() => {
+    try {
+      const c = localStorage.getItem("generatedClaims");
+      if (c) setGeneratedClaims(JSON.parse(c));
+      const ib = localStorage.getItem("inboundFiles");
+      if (ib) setInboundFiles(JSON.parse(ib));
+      const rc = localStorage.getItem("reconFiles");
+      if (rc) setReconFiles(JSON.parse(rc));
+    } catch {}
+  }, []);
 
   // Settings & DB State
   const [merchants, setMerchants] = useState([]);
@@ -185,6 +195,9 @@ export default function Dashboard() {
   useEffect(() => { try { localStorage.setItem("filters", JSON.stringify(filters)); } catch {} }, [filters]);
   useEffect(() => { try { localStorage.setItem("skipDuplicates", JSON.stringify(skipDuplicates)); } catch {} }, [skipDuplicates]);
   useEffect(() => { try { localStorage.setItem("autoCheck", JSON.stringify(autoCheck)); } catch {} }, [autoCheck]);
+  useEffect(() => { try { localStorage.setItem("generatedClaims", JSON.stringify(generatedClaims)); } catch {} }, [generatedClaims]);
+  useEffect(() => { try { localStorage.setItem("inboundFiles", JSON.stringify(inboundFiles)); } catch {} }, [inboundFiles]);
+  useEffect(() => { try { localStorage.setItem("reconFiles", JSON.stringify(reconFiles)); } catch {} }, [reconFiles]);
 
   const handleAuditFiles = async (files) => {
     setIsLoading(true);
@@ -777,7 +790,7 @@ export default function Dashboard() {
             <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg bg-slate-900 dark:bg-foreground text-white dark:text-background hover:bg-slate-700 transition-colors" onClick={() => multiFileInputRef.current?.click()}>
               <FolderOpen size={12} /> Select Files
             </button>
-            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); setSelectedClaimKey(null); if (multiFileInputRef.current) multiFileInputRef.current.value = ""; }}>
+            <button className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg border border-slate-200 dark:border-border text-slate-600 hover:bg-slate-50 transition-colors" onClick={() => { setGeneratedClaims([]); setInboundFiles([]); setReconFiles([]); setSelectedClaimKey(null); if (multiFileInputRef.current) multiFileInputRef.current.value = ""; try { localStorage.removeItem("generatedClaims"); localStorage.removeItem("inboundFiles"); localStorage.removeItem("reconFiles"); } catch {} }}>
               <FileText size={12} /> New Audit
             </button>
             <input type="file" ref={multiFileInputRef} multiple className="hidden" accept=".csv,.xlsx" onChange={e => handleAuditFiles(e.target.files)} />
