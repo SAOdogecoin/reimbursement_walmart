@@ -221,23 +221,37 @@ export async function fetchCaseStatuses(gtins) {
 }
 
 export async function loadAllNotes() {
-    const rows = await prisma.note.findMany();
-    const map = {};
-    for (const r of rows) map[r.noteKey] = { text: r.noteText, color: r.noteColor || "" };
-    return map;
+    try {
+        const rows = await prisma.note.findMany();
+        const map = {};
+        for (const r of rows) {
+            if (!r?.noteKey) continue;
+            map[r.noteKey] = { text: r.noteText || "", color: r.noteColor || "" };
+        }
+        return map;
+    } catch (e) {
+        console.error("loadAllNotes error:", e);
+        throw new Error(`Failed to load notes: ${e?.message || "unknown error"}`);
+    }
 }
 
 export async function saveNote(noteKey, noteText, noteColor) {
-    if (!noteKey) return;
-    if (!noteText) {
-        await prisma.note.deleteMany({ where: { noteKey } });
-        return;
+    if (!noteKey) throw new Error("saveNote: missing noteKey");
+    try {
+        if (!noteText) {
+            await prisma.note.deleteMany({ where: { noteKey } });
+            return { ok: true, deleted: true };
+        }
+        await prisma.note.upsert({
+            where: { noteKey },
+            update: { noteText, noteColor: noteColor || null, updatedAt: new Date() },
+            create: { noteKey, noteText, noteColor: noteColor || null, updatedAt: new Date() },
+        });
+        return { ok: true, deleted: false };
+    } catch (e) {
+        console.error("saveNote error:", e);
+        throw new Error(`Failed to save note: ${e?.message || "unknown error"}`);
     }
-    await prisma.note.upsert({
-        where: { noteKey },
-        update: { noteText, noteColor: noteColor || null, updatedAt: new Date() },
-        create: { noteKey, noteText, noteColor: noteColor || null, updatedAt: new Date() },
-    });
 }
 
 export async function importCaseStatuses(rows) {

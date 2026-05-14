@@ -65,20 +65,32 @@ export default function Dashboard() {
     return new Set(["Inbound Discrepancy", "Damaged Inbound", "MTR Shortage", "Lost in Warehouse", "Damaged in Warehouse", "Unused Label"]);
   });
   const [claimNotes, setClaimNotes] = useState({});
+  const [notesLoaded, setNotesLoaded] = useState(false);
+  // Load notes from the database on mount. The `notesLoaded` flag is used by
+  // downstream effects (the textarea sync, the save guard) so they only act
+  // after we know what's actually in the DB — never overwrite or surface "no note"
+  // while the fetch is still in-flight.
   useEffect(() => {
+    let cancelled = false;
     loadAllNotes().then(map => {
-      // map: { [noteKey]: { text, color } }
-      // Flatten to { [noteKey]: text } for backward compat with existing note display
+      if (cancelled) return;
       const flat = {};
-      for (const [k, v] of Object.entries(map)) flat[k] = v.text;
+      for (const [k, v] of Object.entries(map || {})) {
+        if (v && v.text) flat[k] = v.text;
+      }
       setClaimNotes(flat);
-    }).catch(() => {
-      // fallback to localStorage if DB is unavailable
+      setNotesLoaded(true);
+    }).catch(err => {
+      if (cancelled) return;
+      console.error("loadAllNotes failed:", err);
       try {
         const saved = localStorage.getItem("claimNotes");
         if (saved) setClaimNotes(JSON.parse(saved));
       } catch {}
+      // Mark as loaded so the UI unblocks; saves will retry the DB.
+      setNotesLoaded(true);
     });
+    return () => { cancelled = true; };
   }, []);
 
   const toggleInvestigated = (idx, e) => {
@@ -109,12 +121,26 @@ export default function Dashboard() {
   };
 
   const updateClaimNote = (key, text) => {
-    const next = { ...claimNotes, [key]: text };
+    // Block writes until the initial load has resolved. Otherwise an early save
+    // (e.g. clicking Save on a claim opened before loadAllNotes returns) could
+    // upsert "" and trip the delete branch in saveNote, wiping the stored note.
+    if (!notesLoaded) {
+      toast("Notes still loading. Try again in a moment.");
+      return;
+    }
+    const next = { ...claimNotes };
+    if (text) next[key] = text; else delete next[key];
     setClaimNotes(next);
-    saveNote(key, text, "").catch(() => {
-      // if DB save fails, fall back to localStorage
-      try { localStorage.setItem("claimNotes", JSON.stringify(next)); } catch {}
-    });
+    saveNote(key, text, "")
+      .then(() => {
+        if (text) toast("Note saved.");
+        else toast("Note cleared.");
+      })
+      .catch(err => {
+        console.error("saveNote failed:", err);
+        toast.error("Failed to save note. Stored locally as fallback.");
+        try { localStorage.setItem("claimNotes", JSON.stringify(next)); } catch {}
+      });
   };
 
   const exportNotes = () => {
@@ -460,9 +486,14 @@ export default function Dashboard() {
 
   const selectedClaim = selectedClaimKey ? generatedClaims.find(c => getClaimKey(c) === selectedClaimKey) ?? null : null;
   const [noteEdit, setNoteEdit] = useState("");
+  // Re-sync textarea whenever the selected claim changes OR when notes finish loading from DB.
+  // Without notesLoaded in deps, opening a claim before the DB fetch resolves leaves the
+  // textarea stuck at "" even after notes arrive — which lets the user accidentally
+  // overwrite the saved note.
   useEffect(() => {
-    setNoteEdit(selectedClaim ? claimNotes[getNoteKey(selectedClaim)] || "" : "");
-  }, [selectedClaimKey]);
+    if (!selectedClaim) { setNoteEdit(""); return; }
+    setNoteEdit(claimNotes[getNoteKey(selectedClaim)] || "");
+  }, [selectedClaimKey, notesLoaded]);
 
   const generateDisputeXlsx = async (claim) => {
     const xlsx = await import("xlsx");
