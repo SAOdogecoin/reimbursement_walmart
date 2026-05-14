@@ -29,3 +29,12 @@ model CaseStatus {
   status    String   // "Declined" | "Pending"
   createdAt DateTime @default(now())
 }
+
+model Note {
+  noteKey   String   @id @map("note_key")
+  noteText  String   @map("note_text")
+  noteColor String?  @map("note_color")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("notes")
+}

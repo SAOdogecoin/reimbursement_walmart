@@ -15,7 +15,7 @@ import {
   Palette, X, CheckCircle2, AlertCircle, AlertTriangle, Loader2, Plus, Eye, EyeOff, Package
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses, importCaseStatuses } from "@/actions/upload";
+import { processSettlementFile, getMerchants, fetchCrosscheckData, fetchCaseStatuses, importCaseStatuses, loadAllNotes, saveNote } from "@/actions/upload";
 import { parseFile, findInboundClaims, findWarehouseClaims, findUnusedLabelClaims } from "@/lib/parser";
 
 export default function Dashboard() {
@@ -66,10 +66,19 @@ export default function Dashboard() {
   });
   const [claimNotes, setClaimNotes] = useState({});
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("claimNotes");
-      if (saved) setClaimNotes(JSON.parse(saved));
-    } catch {}
+    loadAllNotes().then(map => {
+      // map: { [noteKey]: { text, color } }
+      // Flatten to { [noteKey]: text } for backward compat with existing note display
+      const flat = {};
+      for (const [k, v] of Object.entries(map)) flat[k] = v.text;
+      setClaimNotes(flat);
+    }).catch(() => {
+      // fallback to localStorage if DB is unavailable
+      try {
+        const saved = localStorage.getItem("claimNotes");
+        if (saved) setClaimNotes(JSON.parse(saved));
+      } catch {}
+    });
   }, []);
 
   const toggleInvestigated = (idx, e) => {
@@ -102,7 +111,10 @@ export default function Dashboard() {
   const updateClaimNote = (key, text) => {
     const next = { ...claimNotes, [key]: text };
     setClaimNotes(next);
-    localStorage.setItem("claimNotes", JSON.stringify(next));
+    saveNote(key, text, "").catch(() => {
+      // if DB save fails, fall back to localStorage
+      try { localStorage.setItem("claimNotes", JSON.stringify(next)); } catch {}
+    });
   };
 
   const exportNotes = () => {
@@ -120,7 +132,9 @@ export default function Dashboard() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target.result);
-        setClaimNotes(prev => { const next = { ...prev, ...parsed }; localStorage.setItem("claimNotes", JSON.stringify(next)); return next; });
+        setClaimNotes(prev => { const next = { ...prev, ...parsed }; return next; });
+        // Persist each imported note to DB
+        Promise.all(Object.entries(parsed).map(([k, v]) => saveNote(k, v, ""))).catch(() => {});
         toast("Notes imported.");
       } catch { toast.error("Failed to parse notes file."); }
     };

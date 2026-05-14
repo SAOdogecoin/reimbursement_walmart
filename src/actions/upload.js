@@ -220,6 +220,26 @@ export async function fetchCaseStatuses(gtins) {
     });
 }
 
+export async function loadAllNotes() {
+    const rows = await prisma.note.findMany();
+    const map = {};
+    for (const r of rows) map[r.noteKey] = { text: r.noteText, color: r.noteColor || "" };
+    return map;
+}
+
+export async function saveNote(noteKey, noteText, noteColor) {
+    if (!noteKey) return;
+    if (!noteText) {
+        await prisma.note.deleteMany({ where: { noteKey } });
+        return;
+    }
+    await prisma.note.upsert({
+        where: { noteKey },
+        update: { noteText, noteColor: noteColor || null, updatedAt: new Date() },
+        create: { noteKey, noteText, noteColor: noteColor || null, updatedAt: new Date() },
+    });
+}
+
 export async function importCaseStatuses(rows) {
     // rows: [{ gtin, caseId, status }]
     if (!rows.length) return { added: 0, skipped: 0 };
