@@ -222,15 +222,15 @@ export async function fetchCaseStatuses(gtins) {
 
 export async function loadAllNotes() {
     try {
-        const rows = await prisma.note.findMany();
+        const rows = await prisma.$queryRaw`SELECT note_key, note_text, note_color FROM notes`;
         const map = {};
         for (const r of rows) {
-            if (!r?.noteKey) continue;
-            map[r.noteKey] = { text: r.noteText || "", color: r.noteColor || "" };
+            if (!r.note_key) continue;
+            map[r.note_key] = { text: r.note_text || "", color: r.note_color || "" };
         }
         return map;
     } catch (e) {
-        console.error("loadAllNotes error:", e);
+        console.error("loadAllNotes error:", e?.message || e);
         throw new Error(`Failed to load notes: ${e?.message || "unknown error"}`);
     }
 }
@@ -239,17 +239,20 @@ export async function saveNote(noteKey, noteText, noteColor) {
     if (!noteKey) throw new Error("saveNote: missing noteKey");
     try {
         if (!noteText) {
-            await prisma.note.deleteMany({ where: { noteKey } });
+            await prisma.$executeRaw`DELETE FROM notes WHERE note_key = ${noteKey}`;
             return { ok: true, deleted: true };
         }
-        await prisma.note.upsert({
-            where: { noteKey },
-            update: { noteText, noteColor: noteColor || null, updatedAt: new Date() },
-            create: { noteKey, noteText, noteColor: noteColor || null, updatedAt: new Date() },
-        });
+        await prisma.$executeRaw`
+            INSERT INTO notes (note_key, note_text, note_color, updated_at)
+            VALUES (${noteKey}, ${noteText}, ${noteColor || null}, NOW())
+            ON CONFLICT (note_key) DO UPDATE SET
+                note_text = EXCLUDED.note_text,
+                note_color = EXCLUDED.note_color,
+                updated_at = NOW()
+        `;
         return { ok: true, deleted: false };
     } catch (e) {
-        console.error("saveNote error:", e);
+        console.error("saveNote error:", e?.message || e);
         throw new Error(`Failed to save note: ${e?.message || "unknown error"}`);
     }
 }
